@@ -18,7 +18,7 @@ picam2.start()
 while True:
     # Use lores stream for faster preview; full-resolution stream remains configured in "main"
     frame = picam2.capture_array("lores")
-    preview = cv2.cvtColor(frame, cv2.COLOR_YUV2RGB_I420)  # Convert YUV to RGB for display
+    preview = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)  # Convert YUV to BGR for display
     cv2.imshow("Camera", preview)
 
     if cv2.waitKey(1) & 0xFF == 27:  # ESC to exit

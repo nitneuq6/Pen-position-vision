@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../Programmeren"
+		},
+		{
+			"name": "test",
+			"path": "../../Programmeren/C++/test"
+		},
+		{
+			"name": "attiny",
+			"path": "../../../../PlatformIO/Projects/attiny"
+		}
+	],
+	"settings": {}
+}

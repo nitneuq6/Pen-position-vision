@@ -45,34 +45,39 @@ config = picam2.create_preview_configuration(
 
 picam2.configure(config)
 width, height = picam2.camera_configuration()['main']['size']
-print(f"XXXXXX Final Resolution XXXXXX {picam2.camera_configuration()['main']['size']}")
+print(f"Final Resolution: {picam2.camera_configuration()['main']['size']}")
 picam2.start()
 
 # Before loop
 fps100 = fps_counter(100)
+triple_thres = (120, 150)
 
 while True:
     frame = picam2.capture_array("main")
     #frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)     # color
     frame = frame[:height, :width]                          # grayscale
 
-    # # Method 1
-    # # small blur removes noise + shadows
-    # #frame = cv2.GaussianBlur(frame, (3,3), 0)
-    # #ret, frame = cv2.threshold(frame, 150, 255, cv2.THRESH_BINARY)
+    # Method 1
+    # small blur removes noise + shadows
+    #frame = cv2.GaussianBlur(frame, (3,3), 0)
+    #ret, frame = cv2.threshold(frame, 150, 255, cv2.THRESH_BINARY)
 
-    # # Method 2
-    # # estimate background lighting (very blurred)
-    # bg = cv2.GaussianBlur(frame, (9,9), 0)
+    # Method 2
+    # estimate background lighting (very blurred)
+    #bg = cv2.GaussianBlur(frame, (9,9), 0)
 
-    # # normalize lighting
-    # norm = cv2.divide(frame, bg, scale=255)
+    # normalize lighting
+    #norm = cv2.divide(frame, bg, scale=255)
 
-    # # detect dark lines
-    # _, frame = cv2.threshold(norm, 200, 255, cv2.THRESH_BINARY_INV)
+    # detect dark lines
+    #_, frame = cv2.threshold(frame, 170, 255, cv2.THRESH_BINARY_INV)
+    result = np.zeros_like(frame)
+    result[frame < triple_thres[0]] = 0
+    result[(frame >= triple_thres[0]) & (frame < triple_thres[1])] = 100
+    result[frame >= triple_thres[1]] = 255
     fps100.tick()
-    cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.imshow("Camera", frame)
+    cv2.putText(result, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.imshow("Camera", result)
 
     if cv2.waitKey(1) & 0xFF == 27:
         break

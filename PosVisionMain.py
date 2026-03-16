@@ -70,14 +70,18 @@ while True:
     #norm = cv2.divide(frame, bg, scale=255)
 
     # detect dark lines
-    #_, frame = cv2.threshold(frame, 170, 255, cv2.THRESH_BINARY_INV)
-    result = np.zeros_like(frame)
-    result[frame < triple_thres[0]] = 0
-    result[(frame >= triple_thres[0]) & (frame < triple_thres[1])] = 100
-    result[frame >= triple_thres[1]] = 255
+    #_, frame = cv2.threshold(frame, 120, 255, cv2.THRESH_BINARY_INV)
+    # result = np.zeros_like(frame)
+    # result[frame < triple_thres[0]] = 0
+    # result[(frame >= triple_thres[0]) & (frame < triple_thres[1])] = 100
+    # result[frame >= triple_thres[1]] = 255
+
+    #edges = cv2.Canny(frame, 50, 150)
+    #lines = cv2.HoughLinesP(edges, 1, 3.14/180, 50)
+
     fps100.tick()
-    cv2.putText(result, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.imshow("Camera", result)
+    cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.imshow("Camera", frame)
 
     if cv2.waitKey(1) & 0xFF == 27:
         break

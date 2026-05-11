@@ -2,7 +2,6 @@ from picamera2 import Picamera2
 import cv2
 import time
 import numpy as np
-import glob
 
 class fps_counter:
     def __init__(self, frame_count_top):

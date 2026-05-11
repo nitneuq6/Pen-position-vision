@@ -2,6 +2,7 @@ from picamera2 import Picamera2
 import cv2
 import time
 import numpy as np
+import glob
 
 class fps_counter:
     def __init__(self, frame_count_top):
@@ -36,7 +37,7 @@ picam2 = Picamera2()
 #6 SRGGB8,1920x1080/0 - Score: 2541.48
 #7 SRGGB8,3280x2464/0 - Score: 2718
 
-mode = picam2.sensor_modes[5]
+mode = picam2.sensor_modes[4]
 config = picam2.create_preview_configuration(
     sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']},
     main={'format': 'YUV420'},
@@ -84,7 +85,7 @@ while True:
     cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
 
-    lower_green = (35, 100, 100)
+    lower_green = (35, 80, 80)
     upper_green = (85, 255, 255)
     
     mask = cv2.inRange(frame_hsv, lower_green, upper_green)

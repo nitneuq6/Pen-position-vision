@@ -54,8 +54,9 @@ triple_thres = (120, 150)
 
 while True:
     frame = picam2.capture_array("main")
-    #frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)     # color
-    frame = frame[:height, :width]                          # grayscale
+    frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)     # color
+    frame_hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+    #frame = frame[:height, :width]                          # grayscale
 
     # Method 1
     # small blur removes noise + shadows
@@ -81,7 +82,17 @@ while True:
 
     fps100.tick()
     cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+
+    lower_green = (35, 100, 100)
+    upper_green = (85, 255, 255)
+    
+    mask = cv2.inRange(frame_hsv, lower_green, upper_green)
+    highlight = [255, 0, 255]
+    frame[mask > 0] = highlight
+
     cv2.imshow("Camera", frame)
+    #cv2.imshow("Detection Mask", mask)
 
     if cv2.waitKey(1) & 0xFF == 27:
         break

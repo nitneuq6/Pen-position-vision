@@ -89,10 +89,38 @@ while True:
     
     mask = cv2.inRange(frame_hsv, lower_green, upper_green)
     highlight = [255, 0, 255]
+
+    # Opening to remove noise -> poor detection for small points 50+ fps
+    # kernel = np.ones((3, 3), np.uint8)
+    # mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    # Blur to remove noise - point detection might be worse but decent speed (50+ fps) and steady coordinates
+    mask = cv2.medianBlur(mask, 3)
+
+    # Gaus -> nice point and performance but unsteady coordinates
+    #mask = cv2.GaussianBlur(mask, (3,3), 0)
+
+    # Only keep large groups -> possibly best point detection, 40-50 fps
+    # num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    # mask = np.zeros(mask.shape, dtype="uint8")
+    # for i in range(1, num_labels):
+    #     area = stats[i, cv2.CC_STAT_AREA]
+    #     if area > 5:
+    #         mask[labels == i] = 255
+
+    # Highlight mask pixels
     frame[mask > 0] = highlight
 
     cv2.imshow("Camera", frame)
     #cv2.imshow("Detection Mask", mask)
+
+    coords = np.column_stack(np.where(mask > 0))
+    if coords.size > 0:
+        # Calculate the average Y and X (NumPy uses Row, Col order)
+        avg_y, avg_x = np.mean(coords, axis=0).astype(int)
+        
+        # Now you have the (avg_x, avg_y) center point!
+        print(f"Pen is at: {avg_x}, {avg_y}")
 
     if cv2.waitKey(1) & 0xFF == 27:
         break

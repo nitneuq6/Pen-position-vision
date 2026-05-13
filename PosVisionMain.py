@@ -34,7 +34,7 @@ def correct_mm(x, y, mtx, dist, H):
     # 2. Apply Homography to move from Pixels -> Millimeters
     mm_point = cv2.perspectiveTransform(undistorted, H)
     # Return as a simple tuple
-    return round(float(mm_point[0, 0, 0]), 2), round(float(mm_point[0, 0, 1]), 2)
+    return round(float(mm_point[0, 0, 0] + offset_x), 2), round(float(mm_point[0, 0, 1] + offset_y), 2)
 
 # Camera settings
 picam2 = Picamera2()
@@ -55,6 +55,9 @@ calib_data = np.load("calib_data.npz")
 H = np.load("homography_matrix.npy")
 mtx = calib_data['mtx']
 dist = calib_data['dist']
+
+offset_x = 32
+offset_y = 28
 
 # FPS counter setup
 fps100 = fps_counter(100)

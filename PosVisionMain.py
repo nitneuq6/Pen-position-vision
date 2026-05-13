@@ -23,19 +23,21 @@ class fps_counter:
         fps = self.frame_count / elapsed_time
         self.avg_fps = fps
 
+_point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
+def correct_mm(x, y, mtx, dist, H):
+    global _point_buffer
+    # Update the existing buffer instead of creating a new one
+    _point_buffer[0, 0, 0] = float(x)
+    _point_buffer[0, 0, 1] = float(y)
+    # 1. Undistort the point
+    undistorted = cv2.undistortPoints(_point_buffer, mtx, dist, P=mtx)
+    # 2. Apply Homography to move from Pixels -> Millimeters
+    mm_point = cv2.perspectiveTransform(undistorted, H)
+    # Return as a simple tuple
+    return round(float(mm_point[0, 0, 0]), 2), round(float(mm_point[0, 0, 1]), 2)
 
-
+# Camera settings
 picam2 = Picamera2()
-
-#0 SRGGB10_CSI2P,640x480/0 - Score: 4504.81
-#1 SRGGB10_CSI2P,1640x1232/0 - Score: 1000
-#2 SRGGB10_CSI2P,1920x1080/0 - Score: 1541.48
-#3 SRGGB10_CSI2P,3280x2464/0 - Score: 1718
-#4 SRGGB8,640x480/0 - Score: 5504.81
-#5 SRGGB8,1640x1232/0 - Score: 2000
-#6 SRGGB8,1920x1080/0 - Score: 2541.48
-#7 SRGGB8,3280x2464/0 - Score: 2718
-
 mode = picam2.sensor_modes[4]
 config = picam2.create_preview_configuration(
     sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']},
@@ -48,15 +50,72 @@ width, height = picam2.camera_configuration()['main']['size']
 print(f"Final Resolution: {picam2.camera_configuration()['main']['size']}")
 picam2.start()
 
-# Before loop
+#Camera calibration
+calib_data = np.load("calib_data.npz")
+H = np.load("homography_matrix.npy")
+mtx = calib_data['mtx']
+dist = calib_data['dist']
+
+# FPS counter setup
 fps100 = fps_counter(100)
 triple_thres = (120, 150)
 
+# Detection loop
 while True:
+    # Capture HSV frame
     frame = picam2.capture_array("main")
-    frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)     # color
+    frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)
     frame_hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
-    #frame = frame[:height, :width]                          # grayscale
+
+    # FPS counter
+    fps100.tick()
+    cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+    # Create mask for green marker
+    lower_green = (35, 80, 80)
+    upper_green = (85, 255, 255)
+    mask = cv2.inRange(frame_hsv, lower_green, upper_green)
+    highlight = [255, 0, 255]
+
+    # Blur to remove noise - point detection might be worse but decent speed (50+ fps) and steady coordinates
+    mask = cv2.medianBlur(mask, 3)
+
+    # Highlight mask pixels
+    frame[mask > 0] = highlight
+
+    cv2.imshow("Camera", frame)
+    #cv2.imshow("Detection Mask", mask)
+
+    # Calculate coordinates of the marker
+    coords = np.column_stack(np.where(mask > 0))
+    if coords.size > 0:
+        # Calculate the average Y and X (NumPy uses Row, Col order)
+        avg_y, avg_x = np.mean(coords, axis=0).astype(int)
+        
+        # Now you have the (avg_x, avg_y) center point!
+        print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
+
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
+
+picam2.stop()
+cv2.destroyAllWindows()
+
+
+
+
+
+
+#0 SRGGB10_CSI2P,640x480/0 - Score: 4504.81
+#1 SRGGB10_CSI2P,1640x1232/0 - Score: 1000
+#2 SRGGB10_CSI2P,1920x1080/0 - Score: 1541.48
+#3 SRGGB10_CSI2P,3280x2464/0 - Score: 1718
+#4 SRGGB8,640x480/0 - Score: 5504.81
+#5 SRGGB8,1640x1232/0 - Score: 2000
+#6 SRGGB8,1920x1080/0 - Score: 2541.48
+#7 SRGGB8,3280x2464/0 - Score: 2718
+
+
 
     # Method 1
     # small blur removes noise + shadows
@@ -80,22 +139,9 @@ while True:
     #edges = cv2.Canny(frame, 50, 150)
     #lines = cv2.HoughLinesP(edges, 1, 3.14/180, 50)
 
-    fps100.tick()
-    cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-
-    lower_green = (35, 80, 80)
-    upper_green = (85, 255, 255)
-    
-    mask = cv2.inRange(frame_hsv, lower_green, upper_green)
-    highlight = [255, 0, 255]
-
     # Opening to remove noise -> poor detection for small points 50+ fps
     # kernel = np.ones((3, 3), np.uint8)
     # mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-
-    # Blur to remove noise - point detection might be worse but decent speed (50+ fps) and steady coordinates
-    mask = cv2.medianBlur(mask, 3)
 
     # Gaus -> nice point and performance but unsteady coordinates
     #mask = cv2.GaussianBlur(mask, (3,3), 0)
@@ -107,23 +153,3 @@ while True:
     #     area = stats[i, cv2.CC_STAT_AREA]
     #     if area > 5:
     #         mask[labels == i] = 255
-
-    # Highlight mask pixels
-    frame[mask > 0] = highlight
-
-    cv2.imshow("Camera", frame)
-    #cv2.imshow("Detection Mask", mask)
-
-    coords = np.column_stack(np.where(mask > 0))
-    if coords.size > 0:
-        # Calculate the average Y and X (NumPy uses Row, Col order)
-        avg_y, avg_x = np.mean(coords, axis=0).astype(int)
-        
-        # Now you have the (avg_x, avg_y) center point!
-        print(f"Pen is at: {avg_x}, {avg_y}")
-
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
-
-cv2.destroyAllWindows()
-

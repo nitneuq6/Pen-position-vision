@@ -2,7 +2,8 @@ from picamera2 import Picamera2
 import numpy as np
 import cv2 as cv
 
-
+board_size = (7, 5) # Internal corners of the chessboard pattern used for calibration
+square_size = 20 # Size of each square in mm
 
 picam2 = Picamera2()
 mode = picam2.sensor_modes[4]
@@ -18,10 +19,10 @@ picam2.start()
 
 # 1. Setup criteria and object points (for a 7x6 internal corner board)
 criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-board_size = (7, 5) # Internal corners
+board_size = board_size # Internal corners
 
 objp = np.zeros((board_size[0] * board_size[1], 3), np.float32)
-objp[:,:2] = np.mgrid[0:board_size[0], 0:board_size[1]].T.reshape(-1,2)
+objp[:,:2] = np.mgrid[0:board_size[0], 0:board_size[1]].T.reshape(-1,2) * square_size # Scale by the actual square size in mm
 
 objpoints = [] 
 imgpoints = [] 
@@ -31,6 +32,7 @@ print("Capturing calibration frame...")
 frame_yuv = picam2.capture_array("main")
 img = cv.cvtColor(frame_yuv, cv.COLOR_YUV420p2RGB)     # color
 gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+#frame = frame[:height, :width]                          # grayscale
 
 # while True:
 #     cv.imshow("Camera", gray)
@@ -44,7 +46,8 @@ if ret:
     objpoints.append(objp)
     corners2 = cv.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
     imgpoints.append(corners2)
-
+    # 3. Calculate Homography (Pixels -> MM
+    H, _ = cv.findHomography(corners2, objp[:, :2])
     # Draw result
     cv.drawChessboardCorners(img, board_size, corners2, ret)
     cv.imshow('Calibration Result', img)
@@ -58,8 +61,11 @@ if ret:
     # Save the matrices so you can load them in your tracking script
     np.savez("calib_data.npz", mtx=mtx, dist=dist)
     print("Calibration saved to calib_data.npz")
+    np.save("homography_matrix.npy", H)
+    print("Homography matrix saved to homography_matrix.npy")
 
 else:
     print("Chessboard not found. Try adjusting the light or distance.")
 
+picam2.stop()
 cv.destroyAllWindows()

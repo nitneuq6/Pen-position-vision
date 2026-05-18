@@ -23,6 +23,12 @@ class fps_counter:
         fps = self.frame_count / elapsed_time
         self.avg_fps = fps
 
+def click_event(event, x, y, flags, param):
+    global running
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if exit_button_coord[0] <= x <= exit_button_coord[2] and exit_button_coord[1] <= y <= exit_button_coord[3]:
+            running = False
+
 _point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
 def correct_mm(x, y, mtx, dist, H):
     global _point_buffer
@@ -63,8 +69,31 @@ offset_y = 28
 fps100 = fps_counter(100)
 triple_thres = (120, 150)
 
+# Configure OpenCV window
+cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
+cv2.setWindowProperty("Camera", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+cv2.setMouseCallback("Camera", click_event)
+# UI
+exit_button_coord = [50, 50, 200, 100]
+ui_overlay = np.zeros((height, width, 3), dtype=np.uint8)
+
+cv2.rectangle(ui_overlay,
+              (exit_button_coord[0], exit_button_coord[1]),
+              (exit_button_coord[2], exit_button_coord[3]),
+              (255, 0, 0), -1)
+
+cv2.putText(ui_overlay,
+            "EXIT",
+            (65, 80),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2)
+
+
 # Detection loop
-while True:
+running = True
+while running:
     # Capture HSV frame
     frame = picam2.capture_array("main")
     frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)
@@ -85,8 +114,9 @@ while True:
 
     # Highlight mask pixels
     frame[mask > 0] = highlight
-
-    cv2.imshow("Camera", frame)
+    # Add UI
+    screen = cv2.add(frame, ui_overlay)
+    cv2.imshow("Camera", screen)
     #cv2.imshow("Detection Mask", mask)
 
     # Calculate coordinates of the marker

@@ -23,6 +23,21 @@ class fps_counter:
         fps = self.frame_count / elapsed_time
         self.avg_fps = fps
 
+def load_selection():
+    try:
+        with open("selection.txt", "r") as f:
+            selection = f.read().strip()
+        if selection is "sine":
+            return np.load("sine.npy")
+        elif selection is "triangle":
+            return np.load("triangle.npy")
+        elif selection is "line":
+            return np.zeros((100, 2))
+        else:
+            return None
+    except FileNotFoundError:
+        return None
+
 def click_event(event, x, y, flags, param):
     global running
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -68,6 +83,9 @@ offset_y = 28
 # FPS counter setup
 fps100 = fps_counter(100)
 triple_thres = (120, 150)
+
+# Load selected pattern as setpoints
+setpoint_data = load_selection()
 
 # Configure OpenCV window
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)

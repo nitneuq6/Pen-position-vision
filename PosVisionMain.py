@@ -39,6 +39,7 @@ def load_selection():
             return None
     except FileNotFoundError:
         return None
+#### UI BUTTONS ####
 # UI button callback
 def click_event(event, x, y, flags, param):
     global running
@@ -58,6 +59,7 @@ def correct_mm(x, y, mtx, dist, H):
     # Return as a simple tuple
     return round(float(mm_point[0, 0, 0] + offset_x), 2), round(float(mm_point[0, 0, 1] + offset_y), 2)
 _point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
+#### CAMERA ####
 # Camera settings
 picam2 = Picamera2()
 mode = picam2.sensor_modes[4]
@@ -79,7 +81,7 @@ dist = calib_data['dist']
 
 offset_x = 32
 offset_y = 28
-
+#### CREATE OVERLAY OF LINE ####
 # Load selected pattern as setpoints
 setpoint_data = load_selection()
 # Create image
@@ -112,6 +114,10 @@ for p in points:
     # Draw directly
     if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
         line_overlay[py, px] = (255, 255, 255)
+#line_mask = line_overlay[:, :, 0] > 0
+# Drawn overlay
+drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+#### CV SETUP ####
 # Configure OpenCV window
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Camera", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -134,10 +140,10 @@ cv2.putText(ui_overlay,
             2)
 
 
-lower_green = (35, 80, 80)
+lower_green = (35, 80, 100)
 upper_green = (85, 255, 255)
 highlight = [255, 0, 255]
-# Detection loop
+#### MAIN LOOP ####
 running = True
 while running:
     # Capture HSV frame
@@ -146,31 +152,32 @@ while running:
     frame_hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
 
     # FPS counter
-    fps100.tick()
-    cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    #fps100.tick()
+    #cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
     # Create mask for green marker
     mask = cv2.inRange(frame_hsv, lower_green, upper_green)
 
     # Blur to remove noise - point detection might be worse but decent speed (50+ fps) and steady coordinates
-    mask = cv2.medianBlur(mask, 3)
+    mask = cv2.blur(mask, (3, 3))
 
     # Highlight mask pixels
     frame[mask > 0] = highlight
+
     # Add UI
     screen = cv2.add(frame, ui_overlay)
     screen = cv2.add(screen, line_overlay)
+    screen = cv2.add(screen, drawn_overlay)
+
     cv2.imshow("Camera", screen)
-    #cv2.imshow("Detection Mask", mask)
 
     # Calculate coordinates of the marker
-    coords = np.column_stack(np.where(mask > 0))
-    if coords.size > 0:
-        # Calculate the average Y and X (NumPy uses Row, Col order)
-        avg_y, avg_x = np.mean(coords, axis=0).astype(int)
-        
-        # Now you have the (avg_x, avg_y) center point!
+    M = cv2.moments(mask)
+    if M["m00"] > 0:
+        avg_x = int(M["m10"] / M["m00"])
+        avg_y = int(M["m01"] / M["m00"])
         print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
+        drawn_overlay[avg_y, avg_x] = (255, 255, 255)  # Highlight the detected point on the overlay
 
     if cv2.waitKey(1) & 0xFF == 27:
         break
@@ -223,6 +230,8 @@ cv2.destroyAllWindows()
 
     # Gaus -> nice point and performance but unsteady coordinates
     #mask = cv2.GaussianBlur(mask, (3,3), 0)
+    # Previous best but same as normal blur??
+    #mask = cv2.medianBlur(mask, 3)
 
     # Only keep large groups -> possibly best point detection, 40-50 fps
     # num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
@@ -231,3 +240,12 @@ cv2.destroyAllWindows()
     #     area = stats[i, cv2.CC_STAT_AREA]
     #     if area > 5:
     #         mask[labels == i] = 255
+
+    # coords = np.column_stack(np.where(mask > 0))
+    # if coords.size > 0:
+    #     # Calculate the average Y and X (NumPy uses Row, Col order)
+    #     avg_y, avg_x = np.mean(coords, axis=0).astype(int)
+        
+    #     # Now you have the (avg_x, avg_y) center point!
+    #     print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
+    #     drawn_overlay[avg_y, avg_x] = (255, 255, 255)  # Highlight the detected point on the overlay

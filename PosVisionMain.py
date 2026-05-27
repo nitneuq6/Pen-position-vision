@@ -3,6 +3,7 @@ import cv2
 import time
 import numpy as np
 
+# FPS counter to show performance
 class fps_counter:
     def __init__(self, frame_count_top):
         self.start_time = 0
@@ -22,14 +23,29 @@ class fps_counter:
         elapsed_time = end_time - self.start_time
         fps = self.frame_count / elapsed_time
         self.avg_fps = fps
-
+fps100 = fps_counter(100)
+# Load selected pattern
+def load_selection():
+    try:
+        with open("selection.txt", "r") as f:
+            selection = f.read().strip()
+        if selection == "sine":
+            return np.load("sine.npy")
+        elif selection == "triangle":
+            return np.load("triangle.npy")
+        elif selection == "line":
+            return np.zeros((100, 2))
+        else:
+            return None
+    except FileNotFoundError:
+        return None
+# UI button callback
 def click_event(event, x, y, flags, param):
     global running
     if event == cv2.EVENT_LBUTTONDOWN:
         if exit_button_coord[0] <= x <= exit_button_coord[2] and exit_button_coord[1] <= y <= exit_button_coord[3]:
             running = False
-
-_point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
+# Convert pixel to mm using camera calibration data and homography
 def correct_mm(x, y, mtx, dist, H):
     global _point_buffer
     # Update the existing buffer instead of creating a new one
@@ -41,7 +57,7 @@ def correct_mm(x, y, mtx, dist, H):
     mm_point = cv2.perspectiveTransform(undistorted, H)
     # Return as a simple tuple
     return round(float(mm_point[0, 0, 0] + offset_x), 2), round(float(mm_point[0, 0, 1] + offset_y), 2)
-
+_point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
 # Camera settings
 picam2 = Picamera2()
 mode = picam2.sensor_modes[4]
@@ -50,12 +66,10 @@ config = picam2.create_preview_configuration(
     main={'format': 'YUV420'},
     controls={"FrameDurationLimits": (1, 1)}
     )
-
 picam2.configure(config)
 width, height = picam2.camera_configuration()['main']['size']
 print(f"Final Resolution: {picam2.camera_configuration()['main']['size']}")
 picam2.start()
-
 #Camera calibration
 calib_data = np.load("calib_data.npz")
 H = np.load("homography_matrix.npy")
@@ -65,9 +79,8 @@ dist = calib_data['dist']
 offset_x = 32
 offset_y = 28
 
-# FPS counter setup
-fps100 = fps_counter(100)
-triple_thres = (120, 150)
+# Load selected pattern as setpoints
+setpoint_data = load_selection()
 
 # Configure OpenCV window
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
@@ -89,7 +102,6 @@ cv2.putText(ui_overlay,
             0.6,
             (255, 255, 255),
             2)
-
 
 # Detection loop
 running = True
@@ -163,6 +175,7 @@ cv2.destroyAllWindows()
     #norm = cv2.divide(frame, bg, scale=255)
 
     # detect dark lines
+    #Before loop: triple_thres = (120, 150)
     #_, frame = cv2.threshold(frame, 120, 255, cv2.THRESH_BINARY_INV)
     # result = np.zeros_like(frame)
     # result[frame < triple_thres[0]] = 0

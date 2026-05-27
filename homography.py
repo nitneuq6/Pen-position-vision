@@ -4,7 +4,7 @@ import cv2 as cv
 
 # Settings
 board_size = (7, 5) # Internal corners
-square_size = 20 # Square size in mm
+square_size = 19 # Square size in mm
 
 # Load calibration data
 data = np.load("calib_data.npz")

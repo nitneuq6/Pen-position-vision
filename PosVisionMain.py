@@ -73,6 +73,7 @@ picam2.start()
 #Camera calibration
 calib_data = np.load("calib_data.npz")
 H = np.load("homography_matrix.npy")
+H_inv = np.linalg.inv(H)
 mtx = calib_data['mtx']
 dist = calib_data['dist']
 
@@ -81,7 +82,36 @@ offset_y = 28
 
 # Load selected pattern as setpoints
 setpoint_data = load_selection()
+# Create image
+line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
 
+# Scale points
+scale = 92 / 9200
+
+points = np.array([
+    [x * scale, y * scale, 0]
+    for x, y in enumerate(setpoint_data)
+], dtype=np.float32)
+
+offset_x = 0
+offset_y = 100
+
+# Draw
+for p in points:
+    px_raw, py_raw, _ = p
+    
+    # Pack the point into the required format (1, 1, 2)
+    pt_mm = np.array([[[px_raw, py_raw]]], dtype=np.float32)
+    
+    # Transform directly using the inverse homography
+    pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv)
+    
+    px = int(round(pt_pixel[0, 0, 0])) + offset_x
+    py = int(round(pt_pixel[0, 0, 1])) + offset_y
+    
+    # Draw directly
+    if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
+        line_overlay[py, px] = (255, 255, 255)
 # Configure OpenCV window
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Camera", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -103,6 +133,9 @@ cv2.putText(ui_overlay,
             (255, 255, 255),
             2)
 
+
+lower_green = (35, 80, 80)
+upper_green = (85, 255, 255)
 # Detection loop
 running = True
 while running:
@@ -116,8 +149,6 @@ while running:
     cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
     # Create mask for green marker
-    lower_green = (35, 80, 80)
-    upper_green = (85, 255, 255)
     mask = cv2.inRange(frame_hsv, lower_green, upper_green)
     highlight = [255, 0, 255]
 
@@ -128,6 +159,7 @@ while running:
     frame[mask > 0] = highlight
     # Add UI
     screen = cv2.add(frame, ui_overlay)
+    screen = cv2.add(screen, line_overlay)
     cv2.imshow("Camera", screen)
     #cv2.imshow("Detection Mask", mask)
 

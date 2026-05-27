@@ -104,7 +104,7 @@ for p in points:
     pt_mm = np.array([[[px_raw, py_raw]]], dtype=np.float32)
     
     # Transform directly using the inverse homography
-    pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv)
+    pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv) 
     
     px = int(round(pt_pixel[0, 0, 0])) + offset_x
     py = int(round(pt_pixel[0, 0, 1])) + offset_y
@@ -136,6 +136,7 @@ cv2.putText(ui_overlay,
 
 lower_green = (35, 80, 80)
 upper_green = (85, 255, 255)
+highlight = [255, 0, 255]
 # Detection loop
 running = True
 while running:
@@ -150,7 +151,6 @@ while running:
 
     # Create mask for green marker
     mask = cv2.inRange(frame_hsv, lower_green, upper_green)
-    highlight = [255, 0, 255]
 
     # Blur to remove noise - point detection might be worse but decent speed (50+ fps) and steady coordinates
     mask = cv2.medianBlur(mask, 3)

@@ -39,13 +39,23 @@ def load_selection():
             return None
     except FileNotFoundError:
         return None
-#### UI BUTTONS ####
+#### UI ####
+wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 # UI button callback
 def click_event(event, x, y, flags, param):
     global running
+    global offset_x
+    global offset_y
+    global line_overlay
     if event == cv2.EVENT_LBUTTONDOWN:
         if exit_button_coord[0] <= x <= exit_button_coord[2] and exit_button_coord[1] <= y <= exit_button_coord[3]:
             running = False
+        elif start_button_coord[0] <= x <= start_button_coord[2] and start_button_coord[1] <= y <= start_button_coord[3]:
+            if avg_x is not None and avg_y is not None:
+                offset_x = avg_x
+                offset_y = avg_y
+                line_overlay = generate_line(offset_x, offset_y)
+line_overlay = None             
 # Convert pixel to mm using camera calibration data and homography
 def correct_mm(x, y, mtx, dist, H):
     global _point_buffer
@@ -59,6 +69,38 @@ def correct_mm(x, y, mtx, dist, H):
     # Return as a simple tuple
     return round(float(mm_point[0, 0, 0] + offset_x), 2), round(float(mm_point[0, 0, 1] + offset_y), 2)
 _point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
+# Generate reference line
+def generate_line(offset_x, offset_y):
+    #Load selected pattern as setpoints
+    setpoint_data = load_selection()
+    # Create image
+    line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    # Scale points
+    scale = 92 / 9200
+
+    points = np.array([
+        [x * scale, y * scale, 0]
+        for x, y in enumerate(setpoint_data)
+    ], dtype=np.float32)
+
+
+    # Draw
+    for p in points:
+        px_raw, py_raw, _ = p
+        
+        # Pack the point into the required format (1, 1, 2)
+        pt_mm = np.array([[[px_raw, py_raw]]], dtype=np.float32)
+        
+        # Transform directly using the inverse homography
+        pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv) 
+        px = int(round(pt_pixel[0, 0, 0])) + offset_x - 165
+        py = int(round(pt_pixel[0, 0, 1])) + offset_y - 105
+        
+        # Draw directly
+        if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
+            line_overlay[py, px] = (255, 255, 255)
+    return line_overlay
 #### CAMERA ####
 # Camera settings
 picam2 = Picamera2()
@@ -79,70 +121,26 @@ H_inv = np.linalg.inv(H)
 mtx = calib_data['mtx']
 dist = calib_data['dist']
 
-offset_x = 32
-offset_y = 28
 #### CREATE OVERLAY OF LINE ####
-# Load selected pattern as setpoints
-setpoint_data = load_selection()
-# Create image
-line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
-
-# Scale points
-scale = 92 / 9200
-
-points = np.array([
-    [x * scale, y * scale, 0]
-    for x, y in enumerate(setpoint_data)
-], dtype=np.float32)
-
 offset_x = 0
 offset_y = 100
 
-# Draw
-for p in points:
-    px_raw, py_raw, _ = p
-    
-    # Pack the point into the required format (1, 1, 2)
-    pt_mm = np.array([[[px_raw, py_raw]]], dtype=np.float32)
-    
-    # Transform directly using the inverse homography
-    pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv) 
-    
-    px = int(round(pt_pixel[0, 0, 0])) + offset_x
-    py = int(round(pt_pixel[0, 0, 1])) + offset_y
-    
-    # Draw directly
-    if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
-        line_overlay[py, px] = (255, 255, 255)
-#line_mask = line_overlay[:, :, 0] > 0
 # Drawn overlay
 drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+prev_point = None
 #### CV SETUP ####
 # Configure OpenCV window
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Camera", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 cv2.setMouseCallback("Camera", click_event)
-# UI
-exit_button_coord = [50, 50, 200, 100]
-ui_overlay = np.zeros((height, width, 3), dtype=np.uint8)
-
-cv2.rectangle(ui_overlay,
-              (exit_button_coord[0], exit_button_coord[1]),
-              (exit_button_coord[2], exit_button_coord[3]),
-              (255, 0, 0), -1)
-
-cv2.putText(ui_overlay,
-            "EXIT",
-            (65, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            2)
-
-
+# Detection settings and highlight
 lower_green = (35, 80, 100)
 upper_green = (85, 255, 255)
 highlight = [255, 0, 255]
+# UI
+exit_button_coord = [725, 5, 795, 200]
+start_button_coord = [5, 5, 75, 135]
+ui_overlay = np.zeros((height, width, 3), dtype=np.uint8)
 #### MAIN LOOP ####
 running = True
 while running:
@@ -152,8 +150,8 @@ while running:
     frame_hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
 
     # FPS counter
-    #fps100.tick()
-    #cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    fps100.tick()
+    cv2.putText(frame, f"{fps100.avg_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
     # Create mask for green marker
     mask = cv2.inRange(frame_hsv, lower_green, upper_green)
@@ -166,10 +164,18 @@ while running:
 
     # Add UI
     screen = cv2.add(frame, ui_overlay)
-    screen = cv2.add(screen, line_overlay)
-    screen = cv2.add(screen, drawn_overlay)
+    if line_overlay is not None:
+        screen = cv2.subtract(screen, line_overlay)
+    screen = cv2.subtract(screen, drawn_overlay)
+    bordered_screen = cv2.copyMakeBorder(
+        screen, 
+        0, 0, 80, 80, 
+        cv2.BORDER_CONSTANT, 
+        value=[0, 0, 0] # Color to pad with (Black)
+    )
+    final_screen = cv2.add(wallpaper, bordered_screen)
 
-    cv2.imshow("Camera", screen)
+    cv2.imshow("Camera", final_screen)
 
     # Calculate coordinates of the marker
     M = cv2.moments(mask)
@@ -177,7 +183,16 @@ while running:
         avg_x = int(M["m10"] / M["m00"])
         avg_y = int(M["m01"] / M["m00"])
         print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
-        drawn_overlay[avg_y, avg_x] = (255, 255, 255)  # Highlight the detected point on the overlay
+        #drawn_overlay[avg_y, avg_x] = (255, 255, 255)  # Highlight the detected point on the overlay - only pixels
+        
+        if prev_point is not None:
+            cv2.line(drawn_overlay,
+                    prev_point,
+                    (avg_x, avg_y),
+                    (255, 255, 255),
+                    1)
+
+        prev_point = (avg_x, avg_y)
 
     if cv2.waitKey(1) & 0xFF == 27:
         break

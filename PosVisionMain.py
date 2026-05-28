@@ -1,44 +1,14 @@
 from picamera2 import Picamera2
 import cv2
-import time
 import numpy as np
+from utils import fps_counter, correct_mm, generate_line, load_selection, get_error
+from utils import offset_x, offset_y, exit_button_coord, start_button_coord, avg_x, avg_y, line_overlay
 
 # FPS counter to show performance
-class fps_counter:
-    def __init__(self, frame_count_top):
-        self.start_time = 0
-        self.frame_count = frame_count_top
-        self.frame_count_top = frame_count_top
-        self.avg_fps = 0
-    def tick(self):
-        self.frame_count += 1
-        if(self.frame_count >= self.frame_count_top):
-            self.calc_fps()
-            self.frame_count = 0
-            self.start()
-    def start(self):
-        self.start_time = time.perf_counter()
-    def calc_fps(self):
-        end_time = time.perf_counter()
-        elapsed_time = end_time - self.start_time
-        fps = self.frame_count / elapsed_time
-        self.avg_fps = fps
 fps100 = fps_counter(100)
-# Load selected pattern
-def load_selection():
-    try:
-        with open("selection.txt", "r") as f:
-            selection = f.read().strip()
-        if selection == "sine":
-            return np.load("sine.npy")
-        elif selection == "triangle":
-            return np.load("triangle.npy")
-        elif selection == "line":
-            return np.zeros((100, 2))
-        else:
-            return None
-    except FileNotFoundError:
-        return None
+# Setpoints
+setpoints = load_selection()
+
 #### UI ####
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 # UI button callback
@@ -47,6 +17,10 @@ def click_event(event, x, y, flags, param):
     global offset_x
     global offset_y
     global line_overlay
+    global drawn_overlay
+    global started
+    global offset_mm_x
+    global offset_mm_y
     if event == cv2.EVENT_LBUTTONDOWN:
         if exit_button_coord[0] <= x <= exit_button_coord[2] and exit_button_coord[1] <= y <= exit_button_coord[3]:
             running = False
@@ -54,53 +28,11 @@ def click_event(event, x, y, flags, param):
             if avg_x is not None and avg_y is not None:
                 offset_x = avg_x
                 offset_y = avg_y
-                line_overlay = generate_line(offset_x, offset_y)
-line_overlay = None             
-# Convert pixel to mm using camera calibration data and homography
-def correct_mm(x, y, mtx, dist, H):
-    global _point_buffer
-    # Update the existing buffer instead of creating a new one
-    _point_buffer[0, 0, 0] = float(x)
-    _point_buffer[0, 0, 1] = float(y)
-    # 1. Undistort the point
-    undistorted = cv2.undistortPoints(_point_buffer, mtx, dist, P=mtx)
-    # 2. Apply Homography to move from Pixels -> Millimeters
-    mm_point = cv2.perspectiveTransform(undistorted, H)
-    # Return as a simple tuple
-    return round(float(mm_point[0, 0, 0] + offset_x), 2), round(float(mm_point[0, 0, 1] + offset_y), 2)
-_point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
-# Generate reference line
-def generate_line(offset_x, offset_y):
-    #Load selected pattern as setpoints
-    setpoint_data = load_selection()
-    # Create image
-    line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+                offset_mm_x, offset_mm_y = correct_mm(avg_x, avg_y, mtx, dist, H)
+                drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+                line_overlay = generate_line(offset_x, offset_y, H_inv, setpoints)
+                started = True
 
-    # Scale points
-    scale = 92 / 9200
-
-    points = np.array([
-        [x * scale, y * scale, 0]
-        for x, y in enumerate(setpoint_data)
-    ], dtype=np.float32)
-
-
-    # Draw
-    for p in points:
-        px_raw, py_raw, _ = p
-        
-        # Pack the point into the required format (1, 1, 2)
-        pt_mm = np.array([[[px_raw, py_raw]]], dtype=np.float32)
-        
-        # Transform directly using the inverse homography
-        pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv) 
-        px = int(round(pt_pixel[0, 0, 0])) + offset_x - 165
-        py = int(round(pt_pixel[0, 0, 1])) + offset_y - 105
-        
-        # Draw directly
-        if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
-            line_overlay[py, px] = (255, 255, 255)
-    return line_overlay
 #### CAMERA ####
 # Camera settings
 picam2 = Picamera2()
@@ -122,9 +54,6 @@ mtx = calib_data['mtx']
 dist = calib_data['dist']
 
 #### CREATE OVERLAY OF LINE ####
-offset_x = 0
-offset_y = 100
-
 # Drawn overlay
 drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
 prev_point = None
@@ -138,11 +67,14 @@ lower_green = (35, 80, 100)
 upper_green = (85, 255, 255)
 highlight = [255, 0, 255]
 # UI
-exit_button_coord = [725, 5, 795, 200]
-start_button_coord = [5, 5, 75, 135]
 ui_overlay = np.zeros((height, width, 3), dtype=np.uint8)
 #### MAIN LOOP ####
+
+offset_mm_x = 0
+offset_mm_y = 0
+
 running = True
+started = False
 while running:
     # Capture HSV frame
     frame = picam2.capture_array("main")
@@ -175,92 +107,30 @@ while running:
     )
     final_screen = cv2.add(wallpaper, bordered_screen)
 
-    cv2.imshow("Camera", final_screen)
 
     # Calculate coordinates of the marker
     M = cv2.moments(mask)
     if M["m00"] > 0:
         avg_x = int(M["m10"] / M["m00"])
         avg_y = int(M["m01"] / M["m00"])
-        print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
-        #drawn_overlay[avg_y, avg_x] = (255, 255, 255)  # Highlight the detected point on the overlay - only pixels
-        
-        if prev_point is not None:
+        mm_x, mm_y = correct_mm(avg_x, avg_y, mtx, dist, H)
+        corrected_mm_x = mm_x - offset_mm_x
+        corrected_mm_y = mm_y - offset_mm_y
+        #print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
+        #print(f"uncorrected mm: {mm_x:.2f}, {mm_y:.2f}, corrected mm: {corrected_mm_x:.2f}, {corrected_mm_y:.2f}")
+        if prev_point is not None and started:
             cv2.line(drawn_overlay,
                     prev_point,
                     (avg_x, avg_y),
                     (255, 255, 255),
                     1)
+            error = get_error(setpoints, corrected_mm_x, corrected_mm_y)
+            cv2.putText(final_screen, f"{error:.1f}", (400, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         prev_point = (avg_x, avg_y)
-
+    cv2.imshow("Camera", final_screen)
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
 picam2.stop()
 cv2.destroyAllWindows()
-
-
-
-
-
-
-#0 SRGGB10_CSI2P,640x480/0 - Score: 4504.81
-#1 SRGGB10_CSI2P,1640x1232/0 - Score: 1000
-#2 SRGGB10_CSI2P,1920x1080/0 - Score: 1541.48
-#3 SRGGB10_CSI2P,3280x2464/0 - Score: 1718
-#4 SRGGB8,640x480/0 - Score: 5504.81
-#5 SRGGB8,1640x1232/0 - Score: 2000
-#6 SRGGB8,1920x1080/0 - Score: 2541.48
-#7 SRGGB8,3280x2464/0 - Score: 2718
-
-
-
-    # Method 1
-    # small blur removes noise + shadows
-    #frame = cv2.GaussianBlur(frame, (3,3), 0)
-    #ret, frame = cv2.threshold(frame, 150, 255, cv2.THRESH_BINARY)
-
-    # Method 2
-    # estimate background lighting (very blurred)
-    #bg = cv2.GaussianBlur(frame, (9,9), 0)
-
-    # normalize lighting
-    #norm = cv2.divide(frame, bg, scale=255)
-
-    # detect dark lines
-    #Before loop: triple_thres = (120, 150)
-    #_, frame = cv2.threshold(frame, 120, 255, cv2.THRESH_BINARY_INV)
-    # result = np.zeros_like(frame)
-    # result[frame < triple_thres[0]] = 0
-    # result[(frame >= triple_thres[0]) & (frame < triple_thres[1])] = 100
-    # result[frame >= triple_thres[1]] = 255
-
-    #edges = cv2.Canny(frame, 50, 150)
-    #lines = cv2.HoughLinesP(edges, 1, 3.14/180, 50)
-
-    # Opening to remove noise -> poor detection for small points 50+ fps
-    # kernel = np.ones((3, 3), np.uint8)
-    # mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-
-    # Gaus -> nice point and performance but unsteady coordinates
-    #mask = cv2.GaussianBlur(mask, (3,3), 0)
-    # Previous best but same as normal blur??
-    #mask = cv2.medianBlur(mask, 3)
-
-    # Only keep large groups -> possibly best point detection, 40-50 fps
-    # num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
-    # mask = np.zeros(mask.shape, dtype="uint8")
-    # for i in range(1, num_labels):
-    #     area = stats[i, cv2.CC_STAT_AREA]
-    #     if area > 5:
-    #         mask[labels == i] = 255
-
-    # coords = np.column_stack(np.where(mask > 0))
-    # if coords.size > 0:
-    #     # Calculate the average Y and X (NumPy uses Row, Col order)
-    #     avg_y, avg_x = np.mean(coords, axis=0).astype(int)
-        
-    #     # Now you have the (avg_x, avg_y) center point!
-    #     print(f"Pen is at: {avg_x}, {avg_y}, true coords: {correct_mm(avg_x, avg_y, mtx, dist, H)}")
-    #     drawn_overlay[avg_y, avg_x] = (255, 255, 255)  # Highlight the detected point on the overlay

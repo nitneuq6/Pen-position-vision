@@ -71,9 +71,9 @@ class fps_counter:
 
 def build_screen(frame, line_overlay, drawn_overlay, wallpaper):
     """Composite camera frame with all overlays and wallpaper border."""
-    screen = cv2.subtract(frame, drawn_overlay)
     if line_overlay is not None:
-        screen = cv2.subtract(screen, line_overlay)
+        frame = cv2.subtract(frame, line_overlay)
+    screen = cv2.subtract(frame, drawn_overlay)
     wallpaper[:, 80:720] = screen
     return wallpaper
 
@@ -92,7 +92,7 @@ def load_selection():
         if selection in patterns:
             return np.load(patterns[selection])
         elif selection == "line":
-            return np.zeros((100, 2))
+            return np.zeros(9200)
     except FileNotFoundError:
         pass
     return None
@@ -133,6 +133,17 @@ def get_error(setpoints, mm_x, mm_y):
         return 0.0
     return setpoints[scaled_x] / 100 - mm_y
 
+def set_error_color(error):
+    """Return a color based on the magnitude of the error."""
+    error = abs(error)
+    if error <= 1:
+        green = 80
+        red = 255
+    else:
+        red = 0
+        green = 255
+
+    return (255, green, red)  
 
 # ── Module-level constants ────────────────────────────────────────────────────
 

@@ -1,106 +1,145 @@
 import time
 import cv2
 import numpy as np
+from picamera2 import Picamera2
+
+# ── Camera ────────────────────────────────────────────────────────────────────
+
+class CameraStream:
+    """Simple PiCamera2 wrapper — no threading, direct capture each frame."""
+
+    def __init__(self):
+        self.picam2 = Picamera2()
+        mode = self.picam2.sensor_modes[4]
+        config = self.picam2.create_preview_configuration(
+            sensor={"output_size": mode["size"], "bit_depth": mode["bit_depth"]},
+            main={"format": "RGB888"},
+            controls={"FrameDurationLimits": (1, 1)},
+        )
+        self.picam2.configure(config)
+        self.width, self.height = self.picam2.camera_configuration()["main"]["size"]
+        self.picam2.start()
+
+    def read(self):
+        return self.picam2.capture_array("main")
+
+    def stop(self):
+        self.picam2.stop()
+
+
+# ── App State ─────────────────────────────────────────────────────────────────
+
+class AppState:
+    """Holds all mutable runtime state — eliminates global variables in main."""
+
+    def __init__(self):
+        self.running       = True
+        self.started       = False
+        self.offset_x      = 0
+        self.offset_y      = 100
+        self.offset_mm_x   = 0.0
+        self.offset_mm_y   = 0.0
+        self.avg_x         = None
+        self.avg_y         = None
+        self.prev_point    = None
+        self.line_overlay  = None
+        self.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+
+
+# ── FPS Counter ───────────────────────────────────────────────────────────────
 
 class fps_counter:
     def __init__(self, frame_count_top):
-        self.start_time = 0
-        self.frame_count = frame_count_top
         self.frame_count_top = frame_count_top
-        self.avg_fps = 0
+        self.frame_count     = frame_count_top
+        self.start_time      = 0.0
+        self.avg_fps         = 0.0
+
     def tick(self):
         self.frame_count += 1
-        if(self.frame_count >= self.frame_count_top):
-            self.calc_fps()
+        if self.frame_count >= self.frame_count_top:
+            self._calc_fps()
             self.frame_count = 0
-            self.start()
-    def start(self):
-        self.start_time = time.perf_counter()
-    def calc_fps(self):
-        end_time = time.perf_counter()
-        elapsed_time = end_time - self.start_time
-        fps = self.frame_count / elapsed_time
-        self.avg_fps = fps
+            self.start_time  = time.perf_counter()
 
-# Load selected pattern
+    def _calc_fps(self):
+        elapsed      = time.perf_counter() - self.start_time
+        self.avg_fps = self.frame_count / elapsed if elapsed > 0 else 0.0
+
+
+# ── Screen Compositing ────────────────────────────────────────────────────────
+
+def build_screen(frame, line_overlay, drawn_overlay, wallpaper):
+    """Composite camera frame with all overlays and wallpaper border."""
+    screen = cv2.subtract(frame, drawn_overlay)
+    if line_overlay is not None:
+        screen = cv2.subtract(screen, line_overlay)
+    wallpaper[:, 80:720] = screen
+    return wallpaper
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 def load_selection():
+    """Load the pattern selected by the user from selection.txt."""
     try:
         with open("selection.txt", "r") as f:
             selection = f.read().strip()
-        if selection == "sine":
-            return np.load("sine.npy")
-        elif selection == "triangle":
-            return np.load("triangle.npy")
+        patterns = {
+            "sine":     "sine.npy",
+            "triangle": "triangle.npy",
+        }
+        if selection in patterns:
+            return np.load(patterns[selection])
         elif selection == "line":
             return np.zeros((100, 2))
-        else:
-            return None
     except FileNotFoundError:
-        return None
+        pass
+    return None
 
-# Convert pixel to mm using camera calibration data and homography
+
 def correct_mm(x, y, mtx, dist, H):
-    global _point_buffer
-    # Update the existing buffer instead of creating a new one
+    """Convert pixel coordinates to mm using calibration data and homography."""
     _point_buffer[0, 0, 0] = float(x)
     _point_buffer[0, 0, 1] = float(y)
-    # 1. Undistort the point
     undistorted = cv2.undistortPoints(_point_buffer, mtx, dist, P=mtx)
-    # 2. Apply Homography to move from Pixels -> Millimeters
-    mm_point = cv2.perspectiveTransform(undistorted, H)
-    # Return as a simple tuple
-    return round(float(mm_point[0, 0, 0] + offset_x), 2), round(float(mm_point[0, 0, 1] + offset_y), 2)
+    mm_point    = cv2.perspectiveTransform(undistorted, H)
+    return (
+        round(float(mm_point[0, 0, 0]) + offset_x, 2),
+        round(float(mm_point[0, 0, 1]) + offset_y, 2),
+    )
 
-# Generate reference line
+
 def generate_line(offset_x, offset_y, H_inv, setpoints):
-    #Load selected pattern as setpoints
-    setpoint_data = setpoints
-    # Create image
+    """Generate a pixel-space overlay of the reference line from mm setpoints."""
     line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
-
-    # Scale points
     scale = 92 / 9200
 
-    points = np.array([
-        [x * scale, y * scale, 0]
-        for x, y in enumerate(setpoint_data)
-    ], dtype=np.float32)
-
-
-    # Draw
-    for p in points:
-        px_raw, py_raw, _ = p
-        
-        # Pack the point into the required format (1, 1, 2)
-        pt_mm = np.array([[[px_raw, py_raw]]], dtype=np.float32)
-        
-        # Transform directly using the inverse homography
-        pt_pixel = cv2.perspectiveTransform(pt_mm, H_inv) 
-        px = int(round(pt_pixel[0, 0, 0])) + offset_x - 165
-        py = int(round(pt_pixel[0, 0, 1])) + offset_y - 105
-        
-        # Draw directly
+    for i, sp in enumerate(setpoints):
+        pt_mm  = np.array([[[i * scale, sp * scale]]], dtype=np.float32)
+        pt_px  = cv2.perspectiveTransform(pt_mm, H_inv)
+        px = int(round(pt_px[0, 0, 0])) + offset_x - 165
+        py = int(round(pt_px[0, 0, 1])) + offset_y - 105
         if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
             line_overlay[py, px] = (255, 255, 255)
+
     return line_overlay
 
+
 def get_error(setpoints, mm_x, mm_y):
+    """Return signed error between current position and reference setpoint."""
     scaled_x = int(mm_x * 100)
     if scaled_x < 0 or scaled_x >= len(setpoints):
-        return 0
-    else:
-        target_y = setpoints[scaled_x] / 100
-        error = target_y - mm_y
-        return error
+        return 0.0
+    return setpoints[scaled_x] / 100 - mm_y
 
 
+# ── Module-level constants ────────────────────────────────────────────────────
 
 _point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
+
 offset_x = 0
 offset_y = 100
 
-exit_button_coord = [725, 5, 795, 200]
-start_button_coord = [5, 5, 75, 135]
-avg_x = None
-avg_y = None
-line_overlay = None  
+exit_button_coord  = [725,   5, 795, 200]
+start_button_coord = [  5,   5,  75, 135]

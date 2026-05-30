@@ -3,6 +3,7 @@ import numpy as np
 import platform
 import subprocess
 import sys
+import serial
 from utils import (
     fps_counter, correct_mm, generate_line, load_selection, get_error,
     CameraStream, AppState, build_screen,
@@ -25,8 +26,10 @@ fps100    = fps_counter(100)
 
 if platform.system() == "Linux":
     stream         = CameraStream()
+    ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0)
 else:
     stream         = WinCameraStream()
+    #ser = serial.Serial('COM3', 115200, timeout=0)
 
 width, height  = stream.width, stream.height
 
@@ -104,7 +107,8 @@ while state.running:
             corrected_mm_x = mm_x - state.offset_mm_x
             corrected_mm_y = mm_y - state.offset_mm_y
             if state.prev_point is not None and state.started:
-                error = get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
+                error, scaled_target_y = get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
+                #ser.write(f"{error*100:.0f},{scaled_target_y:.0f}\n".encode())
                 color = set_error_color(error)
                 cv2.line(state.drawn_overlay, state.prev_point, (state.avg_x, state.avg_y), color, 3)
                 cv2.putText(final_screen, f"{error:.1f}", (400, 30),
@@ -115,6 +119,10 @@ while state.running:
         cv2.imshow("Camera", final_screen)
         if cv2.waitKey(1) & 0xFF == 27:
             break
+        # if ser.in_waiting > 0:
+        #  ser_line = ser.readline().decode().strip()
+        #  print(f"Received from serial: {ser_line}")
 
+ser.close()
 stream.stop()
 cv2.destroyAllWindows()

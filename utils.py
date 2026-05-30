@@ -1,7 +1,9 @@
 import time
 import cv2
 import numpy as np
-from picamera2 import Picamera2
+import platform
+if platform.system() == "Linux":
+    from picamera2 import Picamera2
 
 # ── Camera ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,18 @@ class CameraStream:
     def stop(self):
         self.picam2.stop()
 
+class WinCameraStream:
+    def __init__(self):
+        self.cam = cv2.VideoCapture(0)
+        self.width = int(self.cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    def read(self):
+        ret, frame = self.cam.read()
+        return frame if ret else None
+
+    def stop(self):
+        self.cam.release()
 
 # ── App State ─────────────────────────────────────────────────────────────────
 

@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
+import platform
 from utils import (
     fps_counter, correct_mm, generate_line, load_selection, get_error,
     CameraStream, AppState, build_screen,
     exit_button_coord, start_button_coord,
-    set_error_color
+    set_error_color, WinCameraStream
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -17,7 +18,11 @@ setpoints = load_selection()
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 fps100    = fps_counter(100)
 
-stream         = CameraStream()
+if platform.system() == "Linux":
+    stream         = CameraStream()
+else:
+    stream         = WinCameraStream()
+
 width, height  = stream.width, stream.height
 
 calib_data = np.load("calib_data.npz")

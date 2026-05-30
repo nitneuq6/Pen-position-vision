@@ -58,13 +58,10 @@ def click_event(event, x, y, flags, param):
         elif terminate_button_coord[0] <= x <= terminate_button_coord[2] and terminate_button_coord[1] <= y <= terminate_button_coord[3]:
             state.running = False           # stop loop
     else:
-        ex0, ey0, ex1, ey1 = exit_button_coord
-        sx0, sy0, sx1, sy1 = start_button_coord
-
-        if ex0 <= x <= ex1 and ey0 <= y <= ey1:
+        if exit_button_coord[0] <= x <= exit_button_coord[2] and exit_button_coord[1] <= y <= exit_button_coord[3]:
             state.__init__()
 
-        elif sx0 <= x <= sx1 and sy0 <= y <= sy1:
+        elif start_button_coord[0] <= x <= start_button_coord[2] and start_button_coord[1] <= y <= start_button_coord[3]:
             if state.avg_x is not None and state.avg_y is not None:
                 state.offset_x    = state.avg_x
                 state.offset_y    = state.avg_y

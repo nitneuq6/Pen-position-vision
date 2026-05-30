@@ -97,7 +97,7 @@ def build_screen(frame, line_overlay, drawn_overlay, wallpaper):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_selection(selection):
-    """Load the pattern selected by the user from selection.txt."""
+    """Load the pattern selected by the user from the main menu."""
     try:
         patterns = {
             "sine":     "sine.npy",

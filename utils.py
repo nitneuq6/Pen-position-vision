@@ -58,6 +58,8 @@ class AppState:
         self.prev_point    = None
         self.line_overlay  = None
         self.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+        self.menu          = True
+        self.setpoints     = None
 
 
 # ── FPS Counter ───────────────────────────────────────────────────────────────
@@ -94,11 +96,9 @@ def build_screen(frame, line_overlay, drawn_overlay, wallpaper):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def load_selection():
+def load_selection(selection):
     """Load the pattern selected by the user from selection.txt."""
     try:
-        with open("selection.txt", "r") as f:
-            selection = f.read().strip()
         patterns = {
             "sine":     "sine.npy",
             "triangle": "triangle.npy",
@@ -165,6 +165,12 @@ _point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
 
 offset_x = 0
 offset_y = 100
-
+# Program buttons
 exit_button_coord  = [725,   5, 795, 200]
 start_button_coord = [  5,   5,  75, 135]
+# Main menu buttons
+sine_button_coord = [125, 245, 290, 330]
+tri_button_coord = [320, 250, 485, 330]
+line_button_coord = [510, 245, 675, 330]
+cal_button_coord = [205, 350, 380, 435]
+terminate_button_coord = [420, 350, 600, 435]

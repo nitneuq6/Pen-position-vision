@@ -107,8 +107,8 @@ while state.running:
             corrected_mm_x = mm_x - state.offset_mm_x
             corrected_mm_y = mm_y - state.offset_mm_y
             if state.prev_point is not None and state.started:
-                error, scaled_target_y = get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
-                #ser.write(f"{error*100:.0f},{scaled_target_y:.0f}\n".encode())
+                error, scaled_error, scaled_target_y = get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
+                #ser.write(f"{scaled_error:.0f},{scaled_target_y:.0f}\n".encode())
                 color = set_error_color(error)
                 cv2.line(state.drawn_overlay, state.prev_point, (state.avg_x, state.avg_y), color, 3)
                 cv2.putText(final_screen, f"{error:.1f}", (400, 30),

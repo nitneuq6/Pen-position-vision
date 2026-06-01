@@ -144,11 +144,11 @@ def get_error(setpoints, mm_x, mm_y):
     """Return signed error between current position and reference setpoint."""
     scaled_x = int(mm_x * 100)
     if scaled_x < 0 or scaled_x >= len(setpoints):
-        return 0.0, 0
+        return (0.0, 0, 0)
     scaled_target_y = setpoints[scaled_x]
     error = (scaled_target_y / 100) - mm_y
     scaled_error = scaled_target_y - scaled_x
-    return error, scaled_error, scaled_target_y
+    return (error, scaled_error, scaled_target_y)
 
 def set_error_color(error):
     """Return a color based on the magnitude of the error."""

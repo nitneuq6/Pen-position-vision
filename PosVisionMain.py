@@ -123,6 +123,6 @@ while state.running:
         #  ser_line = ser.readline().decode().strip()
         #  print(f"Received from serial: {ser_line}")
 
-ser.close()
+#ser.close()
 stream.stop()
 cv2.destroyAllWindows()

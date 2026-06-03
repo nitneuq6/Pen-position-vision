@@ -73,6 +73,7 @@ def click_event(event, x, y, flags, param):
         elif start_button_coord[0] <= x <= start_button_coord[2] and start_button_coord[1] <= y <= start_button_coord[3]:
             if state.avg_x is not None and state.avg_y is not None:
                 if not state.paused:
+                    error_cal.reset()
                     state.offset_x    = state.avg_x
                     state.offset_y    = state.avg_y
                     state.offset_mm_x, state.offset_mm_y = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
@@ -93,6 +94,7 @@ def click_event(event, x, y, flags, param):
             packet = bytes(5)
             print("PAUSE command sent")
             ser.write(packet)
+            error_cal.get_max_mean()
         elif reset_button_coord[0] <= x <= reset_button_coord[2] and reset_button_coord[1] <= y <= reset_button_coord[3]:
             state.soft_reset()
             # 0000 0(cal)(reset)(start)
@@ -110,6 +112,10 @@ def get_ui_text():
         return "IMU not calibrated, press CAL"
     elif ser.grip_released:
         return "Grip release detected"
+    elif not ser.ready:
+        print("Not ready")
+    elif state.paused:
+        return f"Error max: {error_cal.max:.1f} mean: {error_cal.mean:.1f}"
     elif state.started:
         return f"Error: {error:.1f}"
     else:

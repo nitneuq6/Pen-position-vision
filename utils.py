@@ -115,7 +115,12 @@ class serial_comms:
 
 class error_tool:
     def __init__(self):
-        pass
+        self.error_list = []
+        self.max = None
+        self.mean = None
+
+    def reset(self):
+        self.error_list = []
 
     def get_error(self,setpoints, mm_x, mm_y):
         """Return signed error between current position and reference setpoint."""
@@ -125,7 +130,14 @@ class error_tool:
         scaled_target_y = int(setpoints[scaled_x])
         error = (scaled_target_y / 100) - mm_y
         scaled_error = int(scaled_target_y - scaled_x)
+        self.error_list.append(abs(error))
         return (error, scaled_error, scaled_target_y)
+
+    def get_max_mean(self):
+        errors = np.asarray(self.error_list)
+        self.max = errors.max()
+        self.mean = errors.mean()
+        return
 
 # ── App State ─────────────────────────────────────────────────────────────────
 

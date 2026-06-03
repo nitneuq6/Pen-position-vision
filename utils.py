@@ -2,6 +2,7 @@ import time
 import cv2
 import numpy as np
 import platform
+import serial
 if platform.system() == "Linux":
     from picamera2 import Picamera2
 
@@ -41,6 +42,91 @@ class WinCameraStream:
     def stop(self):
         self.cam.release()
 
+# ── Serial Communication ────────────────────────────────────────────────────────────────────
+
+class serial_comms:
+    def __init__(self, port='/dev/ttyUSB0', baud=9600):
+        self.port = port
+        self.baud = baud
+        self.ser = None
+        self.connected = False
+        self.error = False
+        self.ready = False
+        self.calibrated = False
+        self.grip_released = False
+
+    def start(self):
+        self.close()  # ensure clean slate
+        try:
+            self.ser = serial.Serial(self.port, self.baud, timeout=0)
+            self.connected = True
+            print("Serial started")
+        except Exception as e:
+            self.ser = None
+            self.connected = False
+            print(f"Serial connection failed: {e}")
+
+    def write(self, data):
+        if not self.connected:
+            return
+        try:
+            self.ser.write(data)
+        except Exception as e:
+            print(f"Serial write failed: {e}")
+            self.close()
+
+    def check_incoming(self):
+        if not self.connected:
+            return 0
+        try:
+            return self.ser.in_waiting
+        except Exception as e:
+            print(f"Serial check failed: {e}")
+            self.close()
+            return 0
+
+    def read(self):
+        if not self.connected:
+            return False
+        try:
+            if self.ser.in_waiting > 0:
+                byte = self.ser.read(1)[0]
+                self.error         = bool(byte & 0x01)
+                self.ready         = bool(byte & 0x02)
+                self.calibrated    = bool(byte & 0x04)
+                self.grip_released = bool(byte & 0x08)
+                return True
+            return False
+        except Exception as e:
+            print(f"Serial read failed: {e}")
+            self.close()
+            return False
+
+    def close(self):
+        if self.ser is not None:
+            try:
+                self.ser.close()
+            except Exception:
+                pass
+        self.ser = None
+        self.connected = False
+
+# ── Error Tool ────────────────────────────────────────────────────────────────────
+
+class error_tool:
+    def __init__(self):
+        pass
+
+    def get_error(self,setpoints, mm_x, mm_y):
+        """Return signed error between current position and reference setpoint."""
+        scaled_x = int(mm_x * 100)
+        if scaled_x < 0 or scaled_x >= len(setpoints):
+            return (0.0, 0, 0)
+        scaled_target_y = int(setpoints[scaled_x])
+        error = (scaled_target_y / 100) - mm_y
+        scaled_error = int(scaled_target_y - scaled_x)
+        return (error, scaled_error, scaled_target_y)
+
 # ── App State ─────────────────────────────────────────────────────────────────
 
 class AppState:
@@ -49,6 +135,7 @@ class AppState:
     def __init__(self):
         self.running       = True
         self.started       = False
+        self.paused        = False
         self.offset_x      = 0
         self.offset_y      = 100
         self.offset_mm_x   = 0.0
@@ -60,6 +147,16 @@ class AppState:
         self.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
         self.menu          = True
         self.setpoints     = None
+    
+    def soft_reset(self):
+        self.running       = True
+        self.started       = False
+        self.paused        = False
+        self.avg_x         = None
+        self.avg_y         = None
+        self.prev_point    = None
+        self.line_overlay  = None
+        self.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
 
 
 # ── FPS Counter ───────────────────────────────────────────────────────────────
@@ -139,17 +236,6 @@ def generate_line(offset_x, offset_y, H_inv, setpoints):
 
     return line_overlay
 
-
-def get_error(setpoints, mm_x, mm_y):
-    """Return signed error between current position and reference setpoint."""
-    scaled_x = int(mm_x * 100)
-    if scaled_x < 0 or scaled_x >= len(setpoints):
-        return (0.0, 0, 0)
-    scaled_target_y = setpoints[scaled_x]
-    error = (scaled_target_y / 100) - mm_y
-    scaled_error = scaled_target_y - scaled_x
-    return (error, scaled_error, scaled_target_y)
-
 def set_error_color(error):
     """Return a color based on the magnitude of the error."""
     error = abs(error)
@@ -169,8 +255,11 @@ _point_buffer = np.zeros((1, 1, 2), dtype=np.float32)
 offset_x = 0
 offset_y = 100
 # Program buttons
-exit_button_coord  = [725,   5, 795, 200]
-start_button_coord = [  5,   5,  75, 135]
+exit_button_coord  =   [725,   5,  795,  200]
+start_button_coord =   [  5,   5,   75,  135]
+reset_button_coord =   [  5, 275,   75,  475]
+pause_button_coord =   [  5, 140,   75,  270]
+imu_cal_button_coord = [725,  210, 795, 400]
 # Main menu buttons
 sine_button_coord = [125, 245, 290, 330]
 tri_button_coord = [320, 250, 485, 330]

@@ -3,15 +3,18 @@ import numpy as np
 import platform
 import subprocess
 import sys
-import serial
+import struct
 from utils import (
-    fps_counter, correct_mm, generate_line, load_selection, get_error,
-    CameraStream, AppState, build_screen,
+    fps_counter, correct_mm, generate_line, load_selection,
+    CameraStream, serial_comms, AppState, build_screen,
     exit_button_coord, start_button_coord,
     set_error_color, WinCameraStream,
+    error_tool,
     sine_button_coord, tri_button_coord,
     line_button_coord,
-    terminate_button_coord, cal_button_coord
+    terminate_button_coord, cal_button_coord,
+    reset_button_coord, pause_button_coord,
+    imu_cal_button_coord
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -26,10 +29,8 @@ fps100    = fps_counter(100)
 
 if platform.system() == "Linux":
     stream         = CameraStream()
-    ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0)
 else:
     stream         = WinCameraStream()
-    #ser = serial.Serial('COM3', 115200, timeout=0)
 
 width, height  = stream.width, stream.height
 
@@ -40,11 +41,15 @@ mtx        = calib_data["mtx"]
 dist       = calib_data["dist"]
 
 state = AppState()
+ser = serial_comms()
+error_cal = error_tool()
 
 # ── UI Callback ───────────────────────────────────────────────────────────────
 def click_event(event, x, y, flags, param):
     if event != cv2.EVENT_LBUTTONDOWN:
         return
+    if ser.connected == False:
+        ser.start()
     if state.menu:
         if sine_button_coord[0] <= x <= sine_button_coord[2] and sine_button_coord[1] <= y <= sine_button_coord[3]:
             state.setpoints = load_selection("sine")
@@ -62,16 +67,53 @@ def click_event(event, x, y, flags, param):
             state.running = False           # stop loop
     else:
         if exit_button_coord[0] <= x <= exit_button_coord[2] and exit_button_coord[1] <= y <= exit_button_coord[3]:
+            ser.write(bytes(5))
             state.__init__()
 
         elif start_button_coord[0] <= x <= start_button_coord[2] and start_button_coord[1] <= y <= start_button_coord[3]:
             if state.avg_x is not None and state.avg_y is not None:
-                state.offset_x    = state.avg_x
-                state.offset_y    = state.avg_y
-                state.offset_mm_x, state.offset_mm_y = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
-                state.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
-                state.line_overlay  = generate_line(state.offset_x, state.offset_y, H_inv, state.setpoints)
-                state.started = True
+                if not state.paused:
+                    state.offset_x    = state.avg_x
+                    state.offset_y    = state.avg_y
+                    state.offset_mm_x, state.offset_mm_y = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
+                    state.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
+                    state.line_overlay  = generate_line(state.offset_x, state.offset_y, H_inv, state.setpoints)
+                    state.started = True
+                else:
+                    state.paused = False
+        elif imu_cal_button_coord[0] <= x <= imu_cal_button_coord[2] and imu_cal_button_coord[1] <= y <= imu_cal_button_coord[3]:
+            # 0000 0(cal)(reset)(start)
+            cmd = (1 << 2) | (state.started << 0)
+            packet = bytes([cmd]) + bytes(4)
+            print("CAL command sent")
+            ser.write(packet)
+        elif pause_button_coord[0] <= x <= pause_button_coord[2] and pause_button_coord[1] <= y <= pause_button_coord[3]:
+            state.paused = True
+            # 0000 0(cal)(reset)(start)
+            packet = bytes(5)
+            print("PAUSE command sent")
+            ser.write(packet)
+        elif reset_button_coord[0] <= x <= reset_button_coord[2] and reset_button_coord[1] <= y <= reset_button_coord[3]:
+            state.soft_reset()
+            # 0000 0(cal)(reset)(start)
+            cmd = (1 << 1)
+            packet = bytes([cmd]) + bytes(4)
+            print("RESET command sent")
+            ser.write(packet)
+
+def get_ui_text():
+    if not ser.connected:
+        return "Disconnected, tap to retry"
+    elif ser.error:
+        return "Error detected, press RESET"
+    elif not ser.calibrated:
+        return "IMU not calibrated, press CAL"
+    elif ser.grip_released:
+        return "Grip release detected"
+    elif state.started:
+        return f"Error: {error:.1f}"
+    else:
+        return "Ready"
 
 # ── Window ────────────────────────────────────────────────────────────────────
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
@@ -96,7 +138,7 @@ while state.running:
         # Composite frame + UI
         final_screen = build_screen(frame, state.line_overlay, state.drawn_overlay, wallpaper)
         cv2.putText(final_screen, f"{fps100.avg_fps:.1f}", (100, 100),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
         # Marker position
         M = cv2.moments(mask)
@@ -106,23 +148,20 @@ while state.running:
             mm_x, mm_y     = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
             corrected_mm_x = mm_x - state.offset_mm_x
             corrected_mm_y = mm_y - state.offset_mm_y
-            if state.prev_point is not None and state.started:
-                error, scaled_error, scaled_target_y = get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
-                #ser.write(f"{scaled_error:.0f},{scaled_target_y:.0f}\n".encode())
+            if state.prev_point is not None and state.started and not state.paused:
+                error, scaled_error, scaled_target_y = error_cal.get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
+                packet = struct.pack('>Bhh', (1<<0), scaled_error, scaled_target_y)
+                ser.write(packet)
                 color = set_error_color(error)
                 cv2.line(state.drawn_overlay, state.prev_point, (state.avg_x, state.avg_y), color, 3)
-                cv2.putText(final_screen, f"{error:.1f}", (400, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
             state.prev_point = (state.avg_x, state.avg_y)
-
+        cv2.putText(final_screen, get_ui_text(), (100, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.imshow("Camera", final_screen)
         if cv2.waitKey(1) & 0xFF == 27:
             break
-        # if ser.in_waiting > 0:
-        #  ser_line = ser.readline().decode().strip()
-        #  print(f"Received from serial: {ser_line}")
+        ser.read()
 
-#ser.close()
+ser.close()
 stream.stop()
 cv2.destroyAllWindows()

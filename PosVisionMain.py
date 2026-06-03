@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
 import platform
-import subprocess
-import sys
 import struct
 from utils import (
     fps_counter, correct_mm, generate_line, load_selection,
@@ -12,7 +10,7 @@ from utils import (
     error_tool,
     sine_button_coord, tri_button_coord,
     line_button_coord,
-    terminate_button_coord, cal_button_coord,
+    terminate_button_coord,
     reset_button_coord, pause_button_coord,
     imu_cal_button_coord
 )
@@ -60,9 +58,6 @@ def click_event(event, x, y, flags, param):
         elif line_button_coord[0] <= x <= line_button_coord[2] and line_button_coord[1] <= y <= line_button_coord[3]:
             state.setpoints = load_selection("line")
             state.menu = False
-        elif cal_button_coord[0] <= x <= cal_button_coord[2] and cal_button_coord[1] <= y <= cal_button_coord[3]:
-            proc = subprocess.Popen([sys.executable, "/home/user/Pen-position-vision/homography.py"])
-            proc.wait()   # waits until second script closes
         elif terminate_button_coord[0] <= x <= terminate_button_coord[2] and terminate_button_coord[1] <= y <= terminate_button_coord[3]:
             state.running = False           # stop loop
     else:

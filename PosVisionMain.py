@@ -66,7 +66,7 @@ def click_event(event, x, y, flags, param):
             state.__init__()
 
         elif start_button_coord[0] <= x <= start_button_coord[2] and start_button_coord[1] <= y <= start_button_coord[3]:
-            if state.avg_x is not None and state.avg_y is not None:
+            if state.avg_x is not None and state.avg_y is not None and ser.ready:
                 if not state.paused:
                     error_cal.reset()
                     state.offset_x    = state.avg_x
@@ -100,21 +100,29 @@ def click_event(event, x, y, flags, param):
 
 def get_ui_text():
     if not ser.connected:
-        return "Disconnected, tap to retry"
-    elif ser.error:
-        return "Error detected, press RESET"
+        return ("Status: Disconnected",
+                "Tap anywhere to connect")
+    if ser.error:
+        return ("Status: Error Detected",
+                "Press RESET")
     elif not ser.calibrated:
-        return "IMU not calibrated, press CAL"
+        return ("Status: Not Calibrated",
+                "Press CAL")
     elif ser.grip_released:
-        return "Grip release detected"
+        return ("Status: Grip release",
+                "Hold the grip")
     elif not ser.ready:
-        print("Not ready")
+        return ("Not ready",
+                None)
     elif state.paused:
-        return f"Error max: {error_cal.max:.1f} mean: {error_cal.mean:.1f}"
+        return ("Status: Paused",
+                f"Error max: {error_cal.max:.1f} mean: {error_cal.mean:.1f}")
     elif state.started:
-        return f"Error: {error:.1f}"
+        return ("Status: Active",
+                f"Error: {error:.1f}")
     else:
-        return "Ready"
+        return ("Status: Ready",
+                None)
 
 # ── Window ────────────────────────────────────────────────────────────────────
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
@@ -157,7 +165,9 @@ while state.running:
                 cv2.line(state.drawn_overlay, state.prev_point, (state.avg_x, state.avg_y), color, 3)
 
             state.prev_point = (state.avg_x, state.avg_y)
-        cv2.putText(final_screen, get_ui_text(), (100, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        ui_text1, ui_text2 = get_ui_text()
+        cv2.putText(final_screen, ui_text1, (100, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(final_screen, ui_text2, (100, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.imshow("Camera", final_screen)
         if cv2.waitKey(1) & 0xFF == 27:
             break

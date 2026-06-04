@@ -46,13 +46,13 @@ class WinCameraStream:
 
 class serial_comms:
     def __init__(self, port='/dev/ttyUSB0', baud=9600):
-        self.port = port
-        self.baud = baud
-        self.ser = None
-        self.connected = False
-        self.error = False
-        self.ready = False
-        self.calibrated = False
+        self.port          = port
+        self.baud          = baud
+        self.ser           = None
+        self.connected     = False
+        self.error         = False
+        self.ready         = False
+        self.calibrated    = False
         self.grip_released = False
 
     def start(self):
@@ -109,7 +109,10 @@ class serial_comms:
             except Exception:
                 pass
         self.ser = None
-        self.connected = False
+        self.connected     = False
+        self.ready         = False
+        self.calibrated    = False
+        self.grip_released = False
 
 # ── Error Tool ────────────────────────────────────────────────────────────────────
 
@@ -271,7 +274,7 @@ exit_button_coord  =   [725,   5,  795,  200]
 start_button_coord =   [  5,   5,   75,  135]
 reset_button_coord =   [  5, 275,   75,  475]
 pause_button_coord =   [  5, 140,   75,  270]
-imu_cal_button_coord = [725,  210, 795, 400]
+imu_cal_button_coord = [725,  210, 795,  400]
 # Main menu buttons
 sine_button_coord =      [ 26, 272, 195, 357]
 tri_button_coord =       [220, 272, 388, 357]

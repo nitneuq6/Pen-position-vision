@@ -4,7 +4,7 @@ import platform
 import struct
 from utils import (
     fps_counter, correct_mm, generate_line, load_selection,
-    CameraStream, serial_comms, AppState, build_screen,
+    CameraStream, serial_comms, dummy_serial, AppState, build_screen,
     exit_button_coord, start_button_coord,
     set_error_color, WinCameraStream,
     error_tool,
@@ -27,8 +27,10 @@ fps100    = fps_counter(100)
 
 if platform.system() == "Linux":
     stream         = CameraStream()
+    ser            = serial_comms()
 else:
     stream         = WinCameraStream()
+    ser            = dummy_serial()
 
 width, height  = stream.width, stream.height
 
@@ -39,7 +41,6 @@ mtx        = calib_data["mtx"]
 dist       = calib_data["dist"]
 
 state = AppState()
-ser = serial_comms()
 error_cal = error_tool()
 
 # ── UI Callback ───────────────────────────────────────────────────────────────
@@ -84,12 +85,13 @@ def click_event(event, x, y, flags, param):
             print("CAL command sent")
             ser.write(packet)
         elif pause_button_coord[0] <= x <= pause_button_coord[2] and pause_button_coord[1] <= y <= pause_button_coord[3]:
-            state.paused = True
-            # 0000 0(cal)(reset)(start)
-            packet = bytes(5)
-            print("PAUSE command sent")
-            ser.write(packet)
-            error_cal.get_max_mean()
+            if state.started and not state.paused:
+                state.paused = True
+                # 0000 0(cal)(reset)(start)
+                packet = bytes(5)
+                print("PAUSE command sent")
+                ser.write(packet)
+                error_cal.get_max_mean()
         elif reset_button_coord[0] <= x <= reset_button_coord[2] and reset_button_coord[1] <= y <= reset_button_coord[3]:
             state.soft_reset()
             # 0000 0(cal)(reset)(start)
@@ -142,22 +144,20 @@ while state.running:
 
         # Detection
         mask            = cv2.inRange(frame_hsv, LOWER_GREEN, UPPER_GREEN)
-        frame[mask > 0] = HIGHLIGHT
-
-        # Composite frame + UI
-        final_screen = build_screen(frame, state.line_overlay, state.drawn_overlay, wallpaper)
-        cv2.putText(final_screen, f"{fps100.avg_fps:.1f}", (100, 100),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        #frame[mask > 0] = HIGHLIGHT # Mark all detected pixels
 
         # Marker position
         M = cv2.moments(mask)
         if M["m00"] > 0:
             state.avg_x = int(M["m10"] / M["m00"])
             state.avg_y = int(M["m01"] / M["m00"])
+            frame[state.avg_y, state.avg_x] = [255, 255, 255] # Mark center
             mm_x, mm_y     = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
             corrected_mm_x = mm_x - state.offset_mm_x
             corrected_mm_y = mm_y - state.offset_mm_y
             if state.prev_point is not None and state.started and not state.paused:
+                if not ser.ready:
+                    state.paused = True
                 error, scaled_error, scaled_target_y = error_cal.get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
                 packet = struct.pack('>Bhh', (1<<0), scaled_error, scaled_target_y)
                 ser.write(packet)
@@ -165,9 +165,14 @@ while state.running:
                 cv2.line(state.drawn_overlay, state.prev_point, (state.avg_x, state.avg_y), color, 3)
 
             state.prev_point = (state.avg_x, state.avg_y)
+        # Composite frame + UI
+        final_screen = build_screen(frame, state.line_overlay, state.drawn_overlay, wallpaper)
+        cv2.putText(final_screen, f"{fps100.avg_fps:.1f}", (100, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         ui_text1, ui_text2 = get_ui_text()
         cv2.putText(final_screen, ui_text1, (100, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.putText(final_screen, ui_text2, (100, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
         cv2.imshow("Camera", final_screen)
         if cv2.waitKey(1) & 0xFF == 27:
             break

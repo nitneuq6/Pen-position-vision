@@ -114,6 +114,30 @@ class serial_comms:
         self.calibrated    = False
         self.grip_released = False
 
+class dummy_serial:
+    def __init__(self):
+        self.connected     = False
+        self.error         = False
+        self.ready         = True
+        self.calibrated    = True
+        self.grip_released = False
+
+    def start(self):
+        self.connected = True
+        print("Dummy serial started")
+
+    def write(self, data):
+        pass
+
+    def check_incoming(self):
+        return 0
+
+    def read(self):
+        return None
+
+    def close(self):
+        self.connected     = False
+
 # ── Error Tool ────────────────────────────────────────────────────────────────────
 
 class error_tool:
@@ -129,7 +153,7 @@ class error_tool:
         """Return signed error between current position and reference setpoint."""
         scaled_x = int(mm_x * 100)
         if scaled_x < 0 or scaled_x >= len(setpoints):
-            return (0.0, 0, 0)
+            return (0.0, 0, 0)  # out of bounds
         scaled_target_y = int(setpoints[scaled_x])
         error = (scaled_target_y / 100) - mm_y
         scaled_error = int(scaled_target_y - scaled_x)

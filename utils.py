@@ -71,6 +71,7 @@ class serial_comms:
             return
         try:
             self.ser.write(data)
+            print(f"Data written: {data}")
         except Exception as e:
             print(f"Serial write failed: {e}")
             self.close()
@@ -91,6 +92,7 @@ class serial_comms:
         try:
             if self.ser.in_waiting > 0:
                 byte = self.ser.read(1)[0]
+                print(f"Data read: {byte}")
                 self.error         = bool(byte & 0x01)
                 self.ready         = bool(byte & 0x02)
                 self.calibrated    = bool(byte & 0x04)
@@ -157,6 +159,7 @@ class error_tool:
         scaled_target_y = int(setpoints[scaled_x])
         error = (scaled_target_y / 100) - mm_y
         scaled_error = int(scaled_target_y - scaled_x)
+        print(f"scaled error: {scaled_error}")
         self.error_list.append(abs(error))
         return (error, scaled_error, scaled_target_y)
 

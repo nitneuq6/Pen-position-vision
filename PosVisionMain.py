@@ -27,7 +27,7 @@ fps100    = fps_counter(100)
 
 if platform.system() == "Linux":
     stream         = CameraStream()
-    ser            = serial_comms()
+    ser            = serial_comms(port='/dev/ttyACM0')
 else:
     stream         = WinCameraStream()
     ser            = dummy_serial()

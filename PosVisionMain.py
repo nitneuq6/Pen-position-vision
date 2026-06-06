@@ -159,6 +159,7 @@ while state.running:
                 if not ser.ready:
                     state.paused = True
                 error, scaled_error, scaled_target_y = error_cal.get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
+                #print(f"error: {error:.2f} mm, scaled error: {scaled_error}, scaledtarget y: {scaled_target_y}")
                 packet = struct.pack('>Bhh', (1<<0), scaled_error, scaled_target_y)
                 ser.write(packet)
                 color = set_error_color(error)

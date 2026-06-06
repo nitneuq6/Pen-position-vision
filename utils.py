@@ -156,10 +156,9 @@ class error_tool:
         scaled_x = int(mm_x * 100)
         if scaled_x < 0 or scaled_x >= len(setpoints):
             return (0.0, 0, 0)  # out of bounds
-        scaled_target_y = int(setpoints[scaled_x])
+        scaled_target_y = setpoints[scaled_x]
         error = (scaled_target_y / 100) - mm_y
-        scaled_error = int(scaled_target_y - scaled_x)
-        print(f"scaled error: {scaled_error}")
+        scaled_error = int(round(error * 100))  
         self.error_list.append(abs(error))
         return (error, scaled_error, scaled_target_y)
 
@@ -245,7 +244,7 @@ def load_selection(selection):
         if selection in patterns:
             return np.load(patterns[selection])
         elif selection == "line":
-            return np.zeros(9200)
+            return np.zeros(9000)
     except FileNotFoundError:
         pass
     return None
@@ -266,7 +265,7 @@ def correct_mm(x, y, mtx, dist, H):
 def generate_line(offset_x, offset_y, H_inv, setpoints):
     """Generate a pixel-space overlay of the reference line from mm setpoints."""
     line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
-    scale = 92 / 9200
+    scale = 90 / 9000
 
     for i, sp in enumerate(setpoints):
         pt_mm  = np.array([[[i * scale, sp * scale]]], dtype=np.float32)

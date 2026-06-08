@@ -9,8 +9,8 @@ else:
     stream         = WinCameraStream()
 
 # Settings
-board_size = (7, 5) # Internal corners
-square_size = 19 # Square size in mm
+board_size = (8, 5) # Internal corners
+square_size = 15 # Square size in mm
 
 # Load calibration data
 data = np.load("calib_data.npz")

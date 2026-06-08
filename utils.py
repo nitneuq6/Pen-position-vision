@@ -270,8 +270,8 @@ def generate_line(offset_x, offset_y, H_inv, setpoints):
     for i, sp in enumerate(setpoints):
         pt_mm  = np.array([[[i * scale, sp * scale]]], dtype=np.float32)
         pt_px  = cv2.perspectiveTransform(pt_mm, H_inv)
-        px = int(round(pt_px[0, 0, 0])) + offset_x - 165
-        py = int(round(pt_px[0, 0, 1])) + offset_y - 105
+        px = int(round(pt_px[0, 0, 0])) + offset_x - 116
+        py = int(round(pt_px[0, 0, 1])) + offset_y - 115
         if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
             line_overlay[py, px] = (255, 255, 255)
 

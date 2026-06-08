@@ -25,9 +25,14 @@ menu_wallpaper = cv2.imread("wallpaper.png", cv2.IMREAD_COLOR)
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 fps100    = fps_counter(100)
 
+no_serial = True
+
 if platform.system() == "Linux":
     stream         = CameraStream()
-    ser            = serial_comms(port='/dev/ttyACM0')
+    if no_serial:
+        ser = dummy_serial()
+    else:
+        ser            = serial_comms(port='/dev/ttyACM0')
 else:
     stream         = WinCameraStream()
     ser            = dummy_serial()

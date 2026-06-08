@@ -164,11 +164,10 @@ class error_tool:
         return (error, scaled_error, scaled_target_y)
 
     def get_error_stats(self):
-        if len(errors) > 0:
-            errors = np.asarray(self.error_list)
-            self.max = errors.max()
-            self.rmse = np.sqrt(np.mean(errors**2))
-            self.p95 = np.percentile(abs(errors), 95)
+        errors = np.asarray(self.error_list)
+        self.max = errors.max()
+        self.rmse = np.sqrt(np.mean(errors**2))
+        self.p95 = np.percentile(abs(errors), 95)
         return
 
 # ── App State ─────────────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ menu_wallpaper = cv2.imread("wallpaper.png", cv2.IMREAD_COLOR)
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 fps100    = fps_counter(100)
 
-no_serial = True
+no_serial = False
 
 if platform.system() == "Linux":
     stream         = CameraStream()

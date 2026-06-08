@@ -96,7 +96,7 @@ def click_event(event, x, y, flags, param):
                 packet = bytes(5)
                 print("PAUSE command sent")
                 ser.write(packet)
-                error_cal.get_max_mean()
+                error_cal.get_error_stats()
         elif reset_button_coord[0] <= x <= reset_button_coord[2] and reset_button_coord[1] <= y <= reset_button_coord[3]:
             state.soft_reset()
             # 0000 0(cal)(reset)(start)
@@ -122,8 +122,8 @@ def get_ui_text():
         return ("Not ready",
                 None)
     elif state.paused:
-        return ("Status: Paused",
-                f"Error max: {error_cal.max:.1f} mean: {error_cal.mean:.1f}")
+        return ("Status: Paused  -  Error stats:",
+                f"MAX: {error_cal.max:.1f} RMSE: {error_cal.rmse:.1f} P95: {error_cal.p95:.1f}")
     elif state.started:
         return ("Status: Active",
                 f"Error: {error:.1f}")
@@ -156,7 +156,7 @@ while state.running:
         if M["m00"] > 0:
             state.avg_x = int(M["m10"] / M["m00"])
             state.avg_y = int(M["m01"] / M["m00"])
-            frame[state.avg_y, state.avg_x] = [255, 255, 255] # Mark center
+            frame[state.avg_y, state.avg_x] = [0, 0, 255] # Mark center
             mm_x, mm_y     = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
             corrected_mm_x = mm_x - state.offset_mm_x
             corrected_mm_y = mm_y - state.offset_mm_y

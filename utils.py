@@ -146,7 +146,8 @@ class error_tool:
     def __init__(self):
         self.error_list = []
         self.max = None
-        self.mean = None
+        self.rmse = None
+        self.p95 = None
 
     def reset(self):
         self.error_list = []
@@ -159,13 +160,14 @@ class error_tool:
         scaled_target_y = setpoints[scaled_x]
         error = (scaled_target_y / 100) - mm_y
         scaled_error = int(round(error * 100))  
-        self.error_list.append(abs(error))
+        self.error_list.append(error)
         return (error, scaled_error, scaled_target_y)
 
-    def get_max_mean(self):
+    def get_error_stats(self):
         errors = np.asarray(self.error_list)
         self.max = errors.max()
-        self.mean = errors.mean()
+        self.rmse = np.sqrt(np.mean(errors**2))
+        self.p95 = np.percentile(abs(errors), 95)
         return
 
 # ── App State ─────────────────────────────────────────────────────────────────

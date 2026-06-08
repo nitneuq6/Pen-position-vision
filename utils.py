@@ -145,9 +145,9 @@ class dummy_serial:
 class error_tool:
     def __init__(self):
         self.error_list = []
-        self.max = None
-        self.rmse = None
-        self.p95 = None
+        self.max = 0.0
+        self.rmse = 0.0
+        self.p95 = 0.0
 
     def reset(self):
         self.error_list = []
@@ -164,10 +164,11 @@ class error_tool:
         return (error, scaled_error, scaled_target_y)
 
     def get_error_stats(self):
-        errors = np.asarray(self.error_list)
-        self.max = errors.max()
-        self.rmse = np.sqrt(np.mean(errors**2))
-        self.p95 = np.percentile(abs(errors), 95)
+        if len(errors) > 0:
+            errors = np.asarray(self.error_list)
+            self.max = errors.max()
+            self.rmse = np.sqrt(np.mean(errors**2))
+            self.p95 = np.percentile(abs(errors), 95)
         return
 
 # ── App State ─────────────────────────────────────────────────────────────────

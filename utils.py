@@ -267,22 +267,29 @@ def correct_mm(x, y, mtx, dist, H):
         round(float(mm_point[0, 0, 1]) + offset_y, 2),
     )
 
-
-def generate_line(offset_x, offset_y, H_inv, setpoints):
+def generate_line(offset_x, offset_y, H, H_inv, setpoints):
     """Generate a pixel-space overlay of the reference line from mm setpoints."""
     line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
     scale = 0.01
+    h, w = line_overlay.shape[:2]
 
-    zero_pt = cv2.perspectiveTransform(np.array([[[0, 0]]], dtype=np.float32), H_inv)
-    zero_pt_x = int(round(zero_pt[0, 0, 0]))
-    zero_pt_y = int(round(zero_pt[0, 0, 1]))
-    for i, sp in enumerate(setpoints):
-        pt_mm  = np.array([[[i * scale, sp * scale]]], dtype=np.float32)
-        pt_px  = cv2.perspectiveTransform(pt_mm, H_inv)
-        px = int(round(pt_px[0, 0, 0])) + offset_x - zero_pt_x
-        py = int(round(pt_px[0, 0, 1])) + offset_y - zero_pt_y
-        if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
-            line_overlay[py, px] = (255, 255, 255)
+    # Pixel anchor -> mm
+    offset_px = np.array([[[offset_x, offset_y]]], dtype=np.float32)
+    offset_mm = cv2.perspectiveTransform(offset_px, H)[0, 0]
+    offset_x_mm, offset_y_mm = offset_mm
+
+    # Build all mm points, then transform in one batch
+    pts_mm = np.array(
+        [[[i * scale + offset_x_mm, sp * scale + offset_y_mm]] for i, sp in enumerate(setpoints)],
+        dtype=np.float32,
+    )
+    pts_px = cv2.perspectiveTransform(pts_mm, H_inv).reshape(-1, 2)
+
+    # Round to int pixel coords and filter to image bounds
+    pts_px = np.round(pts_px).astype(int)
+    xs, ys = pts_px[:, 0], pts_px[:, 1]
+    valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+    line_overlay[ys[valid], xs[valid]] = (255, 255, 255)
 
     return line_overlay
 

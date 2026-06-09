@@ -91,7 +91,7 @@ def click_event(event, x, y, flags, param):
                     # Reset drawn overlay
                     state.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
                     # Generate line overlay based on setpoints and current position
-                    state.line_overlay  = generate_line(state.offset_x, state.offset_y, H_inv, state.setpoints)
+                    state.line_overlay  = generate_line(state.offset_x, state.offset_y, H, H_inv, state.setpoints)
                     state.started = True
                 else:
                     state.paused = False

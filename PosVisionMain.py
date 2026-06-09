@@ -47,6 +47,7 @@ dist       = calib_data["dist"]
 
 state = AppState()
 error_cal = error_tool()
+error = 0.0
 
 # ── UI Callback ───────────────────────────────────────────────────────────────
 def click_event(event, x, y, flags, param):
@@ -182,7 +183,7 @@ while state.running:
         cv2.imshow("Camera", final_screen)
         if cv2.waitKey(1) & 0xFF == 27:
             break
-        ser.read()
+    ser.read()
 
 ser.close()
 stream.stop()

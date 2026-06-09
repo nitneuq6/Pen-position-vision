@@ -88,7 +88,7 @@ class serial_comms:
 
     def read(self):
         if not self.connected:
-            return False
+            return
         try:
             if self.ser.in_waiting > 0:
                 byte = self.ser.read(1)[0]
@@ -97,12 +97,12 @@ class serial_comms:
                 self.ready         = bool(byte & 0x02)
                 self.calibrated    = bool(byte & 0x04)
                 self.grip_released = bool(byte & 0x08)
-                return True
-            return False
+                return
+            return
         except Exception as e:
             print(f"Serial read failed: {e}")
             self.close()
-            return False
+            return
 
     def close(self):
         if self.ser is not None:
@@ -166,7 +166,7 @@ class error_tool:
     def get_error_stats(self):
         if len(self.error_list) > 0:
             errors = np.asarray(self.error_list)
-            self.max = errors.max()
+            self.max = abs(errors).max()
             self.rmse = np.sqrt(np.mean(errors**2))
             self.p95 = np.percentile(abs(errors), 95)
         return

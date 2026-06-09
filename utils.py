@@ -6,10 +6,12 @@ import serial
 if platform.system() == "Linux":
     from picamera2 import Picamera2
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+N_POINTS = 9000
 # ── Camera ────────────────────────────────────────────────────────────────────
 
 class CameraStream:
-    """Simple PiCamera2 wrapper — no threading, direct capture each frame."""
+    """Simple PiCamera2 wrapper — direct capture each frame."""
 
     def __init__(self):
         self.picam2 = Picamera2()
@@ -50,6 +52,7 @@ class serial_comms:
         self.baud          = baud
         self.ser           = None
         self.connected     = False
+        # Received status flags from microcontroller
         self.error         = False
         self.ready         = False
         self.calibrated    = False
@@ -247,7 +250,7 @@ def load_selection(selection):
         if selection in patterns:
             return np.load(patterns[selection])
         elif selection == "line":
-            return np.zeros(9000)
+            return np.zeros(N_POINTS, dtype=int)
     except FileNotFoundError:
         pass
     return None
@@ -268,7 +271,7 @@ def correct_mm(x, y, mtx, dist, H):
 def generate_line(offset_x, offset_y, H_inv, setpoints):
     """Generate a pixel-space overlay of the reference line from mm setpoints."""
     line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
-    scale = 90 / 9000
+    scale = 0.01
 
     zero_pt = cv2.perspectiveTransform(np.array([[[0, 0]]], dtype=np.float32), H_inv)
     zero_pt_x = int(round(zero_pt[0, 0, 0]))

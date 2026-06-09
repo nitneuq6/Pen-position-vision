@@ -164,10 +164,11 @@ class error_tool:
         return (error, scaled_error, scaled_target_y)
 
     def get_error_stats(self):
-        errors = np.asarray(self.error_list)
-        self.max = errors.max()
-        self.rmse = np.sqrt(np.mean(errors**2))
-        self.p95 = np.percentile(abs(errors), 95)
+        if len(self.error_list) > 0:
+            errors = np.asarray(self.error_list)
+            self.max = errors.max()
+            self.rmse = np.sqrt(np.mean(errors**2))
+            self.p95 = np.percentile(abs(errors), 95)
         return
 
 # ── App State ─────────────────────────────────────────────────────────────────
@@ -269,11 +270,14 @@ def generate_line(offset_x, offset_y, H_inv, setpoints):
     line_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
     scale = 90 / 9000
 
+    zero_pt = cv2.perspectiveTransform(np.array([[[0, 0]]], dtype=np.float32), H_inv)
+    zero_pt_x = int(round(zero_pt[0, 0, 0]))
+    zero_pt_y = int(round(zero_pt[0, 0, 1]))
     for i, sp in enumerate(setpoints):
         pt_mm  = np.array([[[i * scale, sp * scale]]], dtype=np.float32)
         pt_px  = cv2.perspectiveTransform(pt_mm, H_inv)
-        px = int(round(pt_px[0, 0, 0])) + offset_x - 116
-        py = int(round(pt_px[0, 0, 1])) + offset_y - 115
+        px = int(round(pt_px[0, 0, 0])) + offset_x - zero_pt_x
+        py = int(round(pt_px[0, 0, 1])) + offset_y - zero_pt_y
         if 0 <= px < line_overlay.shape[1] and 0 <= py < line_overlay.shape[0]:
             line_overlay[py, px] = (255, 255, 255)
 

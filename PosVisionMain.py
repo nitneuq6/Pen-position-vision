@@ -125,16 +125,16 @@ def get_ui_text():
         return ("Status: Disconnected",
                 "Tap anywhere to connect")
     if ser.error:
-        return ("Status: Error Detected",
+        return ("Status: Error detected",
                 "Press RESET")
     elif not ser.calibrated:
-        return ("Status: Not Calibrated",
+        return ("Status: Not calibrated",
                 "Press CAL")
     elif ser.grip_released:
         return ("Status: Grip release",
                 "Hold the grip")
     elif not ser.ready:
-        return ("Not ready",
+        return ("Status: Not ready",
                 None)
     elif state.paused:
         return ("Status: Paused  -  Error stats:",

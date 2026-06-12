@@ -135,7 +135,7 @@ def get_ui_text():
                 "Hold the grip")
     elif not ser.ready:
         return ("Status: Not ready",
-                None)
+                "Check actuator limits")
     elif state.paused:
         return ("Status: Paused  -  Error stats:",
                 f"MAX: {error_cal.max:.1f} RMSE: {error_cal.rmse:.1f} P95: {error_cal.p95:.1f}")

@@ -104,13 +104,7 @@ def click_event(event, x, y, flags, param):
             ser.write(packet)
         elif pause_button_coord[0] <= x <= pause_button_coord[2] and pause_button_coord[1] <= y <= pause_button_coord[3]:
             if state.started and not state.paused:
-                state.paused = True
-                # 0000 0(cal)(reset)(start)
-                # Send stop bit
-                packet = bytes(5)
-                print("PAUSE command sent")
-                ser.write(packet)
-                error_cal.get_error_stats()
+                pause()
         elif reset_button_coord[0] <= x <= reset_button_coord[2] and reset_button_coord[1] <= y <= reset_button_coord[3]:
             # partial reset of state variables
             state.soft_reset()
@@ -130,8 +124,11 @@ def get_ui_text():
     elif not ser.calibrated:
         return ("Status: Not calibrated",
                 "Press CAL")
+    elif state.paused and ser.grip_released:
+        return ("Status: Paused  -  Grip Released",
+                f"MAX: {error_cal.max:.1f} RMSE: {error_cal.rmse:.1f} P95: {error_cal.p95:.1f}")    
     elif ser.grip_released:
-        return ("Status: Grip release",
+        return ("Status: Grip released",
                 "Hold the grip")
     elif not ser.ready:
         return ("Status: Not ready",
@@ -145,6 +142,16 @@ def get_ui_text():
     else:
         return ("Status: Ready",
                 None)
+
+def pause():
+    state.paused = True
+    # 0000 0(cal)(reset)(start)
+    # Send stop bit
+    packet = bytes(5)
+    print("PAUSE command sent")
+    ser.write(packet)
+    error_cal.get_error_stats()
+
 
 # ── Window ────────────────────────────────────────────────────────────────────
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
@@ -180,7 +187,7 @@ while state.running:
             if state.prev_point is not None and state.started and not state.paused:
                 # Pause if there is an issue with the tool or serial connection
                 if not ser.ready:
-                    state.paused = True
+                    pause()
                 error, scaled_error, scaled_target_y = error_cal.get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
                 # Send command byte plus scaled error and target y values as 16 bit integers
                 packet = struct.pack('>Bhh', (1<<0), scaled_error, scaled_target_y)

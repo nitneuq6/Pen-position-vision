@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import platform
 from utils import WinCameraStream, CameraStream
+import time
 
 if platform.system() == "Linux":
     stream         = CameraStream()
@@ -40,6 +41,7 @@ while True:
     cv2.putText(frame, "EXIT", (15, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
     cv2.putText(frame, f"HSV: {hsv_value}", (180, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
     cv2.imshow("Homography", frame)
+    time.sleep(0.1)
 
     key = cv2.waitKey(1) & 0xFF
 

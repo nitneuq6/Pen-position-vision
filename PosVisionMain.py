@@ -16,8 +16,8 @@ from utils import (
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-LOWER_GREEN = (35,  80, 100)
-UPPER_GREEN = (85, 255, 255)
+LOWER_GREEN = (50,  80, 110)
+UPPER_GREEN = (75, 255, 255)
 HIGHLIGHT   = [255, 0, 255]
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -165,14 +165,14 @@ while state.running:
 
         # Detect marker based on color range
         mask            = cv2.inRange(frame_hsv, LOWER_GREEN, UPPER_GREEN)
-        #frame[mask > 0] = HIGHLIGHT # Mark all detected pixels
+        frame[mask > 0] = HIGHLIGHT # Mark all detected pixels
 
         # Calculate moments to find center of detected marker
         M = cv2.moments(mask)
         if M["m00"] > 0:
             state.avg_x = int(M["m10"] / M["m00"])
             state.avg_y = int(M["m01"] / M["m00"])
-            frame[state.avg_y, state.avg_x] = [0, 0, 255] # Mark center
+            frame[state.avg_y, state.avg_x] = [255, 255, 255] # Mark center
             # Convert to mm and apply offset
             mm_x, mm_y     = correct_mm(state.avg_x, state.avg_y, mtx, dist, H)
             corrected_mm_x = mm_x - state.offset_mm_x
@@ -192,8 +192,7 @@ while state.running:
             state.prev_point = (state.avg_x, state.avg_y)
         # Composite frame + UI
         final_screen = build_screen(frame, state.line_overlay, state.drawn_overlay, wallpaper)
-        cv2.putText(final_screen, f"{fps100.avg_fps:.1f}", (100, 100),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        #cv2.putText(final_screen, f"{fps100.avg_fps:.1f}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         ui_text1, ui_text2 = get_ui_text()
         # Add ui text to screen
         cv2.putText(final_screen, ui_text1, (100, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)

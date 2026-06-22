@@ -3,7 +3,7 @@ import numpy as np
 import platform
 import struct
 from utils import (
-    fps_counter, correct_mm, generate_line, load_selection,
+    correct_mm, generate_line, load_selection, combined_calculator,
     CameraStream, serial_comms, dummy_serial, AppState, build_screen,
     exit_button_coord, start_button_coord,
     set_error_color, WinCameraStream,
@@ -19,12 +19,13 @@ from utils import (
 LOWER_GREEN = (50,  80, 110)
 UPPER_GREEN = (75, 255, 255)
 HIGHLIGHT   = [255, 0, 255]
+MAX_SPEED   = 20.0
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 # Load UI assets
 menu_wallpaper = cv2.imread("wallpaper.png", cv2.IMREAD_COLOR)
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
-fps100    = fps_counter(100)
+multi_calculator = combined_calculator(30, 5)
 # Disable serial for testing without hardware
 no_serial = False
 # Select correct camera and serial classes based on OS
@@ -39,8 +40,9 @@ else:
     ser            = dummy_serial()
 # Save camera resolution for later use
 width, height  = stream.width, stream.height
-# Init error value for display
+# Init pos values for display
 error = 0.0
+mm_y = 0.0
 # Load calibration data
 calib_data = np.load("calib_data.npz")
 H          = np.load("homography_matrix.npy")
@@ -168,8 +170,6 @@ while state.running:
         frame     = stream.read()
         # Convert frame to HSV for color detection
         frame_hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
-        fps100.tick()
-
         # Detect marker based on color range
         mask            = cv2.inRange(frame_hsv, LOWER_GREEN, UPPER_GREEN)
         frame[mask > 0] = HIGHLIGHT # Mark all detected pixels
@@ -186,7 +186,7 @@ while state.running:
             corrected_mm_y = mm_y - state.offset_mm_y
             if state.prev_point is not None and state.started and not state.paused:
                 # Pause if there is an issue with the tool or serial connection
-                if not ser.ready:
+                if not ser.ready or multi_calculator.avg_speed > MAX_SPEED:
                     pause()
                 error, scaled_error, scaled_target_y = error_cal.get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
                 # Send command byte plus scaled error and target y values as 16 bit integers
@@ -199,7 +199,9 @@ while state.running:
             state.prev_point = (state.avg_x, state.avg_y)
         # Composite frame + UI
         final_screen = build_screen(frame, state.line_overlay, state.drawn_overlay, wallpaper)
-        #cv2.putText(final_screen, f"{fps100.avg_fps:.1f}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(final_screen, f"{multi_calculator.avg_fps:.1f}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(final_screen, f"{multi_calculator.avg_speed:.1f} cm/s", (100, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        #cv2.putText(final_screen, f"{dynamics30.avg_acc:.1f} cm/s^2", (100, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         ui_text1, ui_text2 = get_ui_text()
         # Add ui text to screen
         cv2.putText(final_screen, ui_text1, (100, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
@@ -209,6 +211,7 @@ while state.running:
         if cv2.waitKey(1) & 0xFF == 27:
             break
     ser.read()
+    multi_calculator.tick(mm_y)
 
 ser.close()
 stream.stop()

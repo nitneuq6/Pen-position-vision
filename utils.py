@@ -206,25 +206,60 @@ class AppState:
         self.drawn_overlay = np.zeros((480, 640, 3), dtype=np.uint8)
 
 
-# ── FPS Counter ───────────────────────────────────────────────────────────────
+# ── FPS + Dynamics Calculator ───────────────────────────────────────────────────────────────
 
-class fps_counter:
-    def __init__(self, frame_count_top):
-        self.frame_count_top = frame_count_top
-        self.frame_count     = frame_count_top
-        self.start_time      = 0.0
-        self.avg_fps         = 0.0
+class combined_calculator:
+    def __init__(self, fps_interval, dynamics_interval):
+        """
+        fps_interval      : number of frames between FPS updates
+        dynamics_interval : number of frames between speed/acc updates
+        """
+        now = time.perf_counter()
 
-    def tick(self):
-        self.frame_count += 1
-        if self.frame_count >= self.frame_count_top:
-            self._calc_fps()
-            self.frame_count = 0
-            self.start_time  = time.perf_counter()
+        # FPS state
+        self.fps_interval   = fps_interval
+        self.fps_count      = 0
+        self.fps_start      = now
+        self.avg_fps        = 0.0
 
-    def _calc_fps(self):
-        elapsed      = time.perf_counter() - self.start_time
-        self.avg_fps = self.frame_count / elapsed if elapsed > 0 else 0.0
+        # Dynamics state
+        self.dyn_interval   = dynamics_interval
+        self.dyn_count      = 0
+        self.dyn_start      = now
+        self.avg_speed      = 0.0
+        self.avg_acc        = 0.0
+        self.prev_y         = 0.0
+        self.prev_speed     = 0.0
+
+    def tick(self, y_pos):
+        now = time.perf_counter()   # single call shared by both counters
+        self._tick_fps(now)
+        self._tick_dynamics(y_pos / 10, now)
+
+    # -- FPS ------------------------------------------------------------------
+
+    def _tick_fps(self, now):
+        self.fps_count += 1
+        if self.fps_count >= self.fps_interval:
+            elapsed      = now - self.fps_start
+            self.avg_fps = self.fps_count / elapsed if elapsed > 0 else 0.0
+            self.fps_count = 0
+            self.fps_start = now
+
+    # -- Dynamics -------------------------------------------------------------
+
+    def _tick_dynamics(self, y_pos, now):
+        self.dyn_count += 1
+        if self.dyn_count >= self.dyn_interval:
+            elapsed         = now - self.dyn_start
+            delta_y         = y_pos - self.prev_y
+            self.avg_speed  = delta_y / elapsed if elapsed > 0 else 0.0
+            delta_speed     = self.avg_speed - self.prev_speed
+            self.avg_acc    = delta_speed / elapsed if elapsed > 0 else 0.0
+            self.prev_speed = self.avg_speed
+            self.prev_y     = y_pos
+            self.dyn_count  = 0
+            self.dyn_start  = now
 
 
 # ── Screen Compositing ────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ LOWER_GREEN = (50,  80, 110)
 UPPER_GREEN = (75, 255, 255)
 HIGHLIGHT   = [255, 0, 255]
 MAX_SPEED   = 20.0
+MAX_DEVIATION = 20.0
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 # Load UI assets
@@ -27,7 +28,7 @@ menu_wallpaper = cv2.imread("wallpaper.png", cv2.IMREAD_COLOR)
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 multi_calculator = combined_calculator(30, 5)
 # Disable serial for testing without hardware
-no_serial = False
+no_serial = True
 # Select correct camera and serial classes based on OS
 if platform.system() == "Linux":
     stream         = CameraStream()
@@ -186,7 +187,7 @@ while state.running:
             corrected_mm_y = mm_y - state.offset_mm_y
             if state.prev_point is not None and state.started and not state.paused:
                 # Pause if there is an issue with the tool or serial connection
-                if not ser.ready or multi_calculator.avg_speed > MAX_SPEED:
+                if not ser.ready or multi_calculator.avg_speed > MAX_SPEED or abs(error) > MAX_DEVIATION:
                     pause()
                 error, scaled_error, scaled_target_y = error_cal.get_error(state.setpoints, corrected_mm_x, corrected_mm_y)
                 # Send command byte plus scaled error and target y values as 16 bit integers

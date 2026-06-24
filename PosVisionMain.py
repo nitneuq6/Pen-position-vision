@@ -28,7 +28,7 @@ menu_wallpaper = cv2.imread("wallpaper.png", cv2.IMREAD_COLOR)
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
 multi_calculator = combined_calculator(30, 5)
 # Disable serial for testing without hardware
-no_serial = True
+no_serial = False #Test
 # Select correct camera and serial classes based on OS
 if platform.system() == "Linux":
     stream         = CameraStream()

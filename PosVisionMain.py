@@ -26,7 +26,7 @@ MAX_DEVIATION = 20.0
 # Load UI assets
 menu_wallpaper = cv2.imread("wallpaper.png", cv2.IMREAD_COLOR)
 wallpaper = cv2.imread("Main_UI.png", cv2.IMREAD_COLOR)
-multi_calculator = combined_calculator(30, 5)
+multi_calculator = combined_calculator(100, 5)
 # Disable serial for testing without hardware
 no_serial = False
 # Select correct camera and serial classes based on OS
@@ -200,8 +200,8 @@ while state.running:
             state.prev_point = (state.avg_x, state.avg_y)
         # Composite frame + UI
         final_screen = build_screen(frame, state.line_overlay, state.drawn_overlay, wallpaper)
-        cv2.putText(final_screen, f"{multi_calculator.avg_fps:.1f}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        cv2.putText(final_screen, f"{multi_calculator.avg_speed:.1f} cm/s", (100, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        #cv2.putText(final_screen, f"{multi_calculator.avg_fps:.1f}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        #cv2.putText(final_screen, f"{multi_calculator.avg_speed:.1f} cm/s", (100, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         #cv2.putText(final_screen, f"{dynamics30.avg_acc:.1f} cm/s^2", (100, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         ui_text1, ui_text2 = get_ui_text()
         # Add ui text to screen

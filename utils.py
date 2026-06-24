@@ -74,7 +74,7 @@ class serial_comms:
             return
         try:
             self.ser.write(data)
-            print(f"Data written: {data}")
+            #print(f"Data written: {data}")
         except Exception as e:
             print(f"Serial write failed: {e}")
             self.close()
@@ -95,7 +95,7 @@ class serial_comms:
         try:
             if self.ser.in_waiting > 0:
                 byte = self.ser.read(1)[0]
-                print(f"Data read: {byte}")
+                #print(f"Data read: {byte}")
                 self.error         = bool(byte & 0x01)
                 self.ready         = bool(byte & 0x02)
                 self.calibrated    = bool(byte & 0x04)
@@ -232,34 +232,37 @@ class combined_calculator:
         self.prev_speed     = 0.0
 
     def tick(self, y_pos):
-        now = time.perf_counter()   # single call shared by both counters
-        self._tick_fps(now)
-        self._tick_dynamics(y_pos / 10, now)
+        self.fps_count += 1
+        self.dyn_count += 1
+
+        # perf_counter only called when at least one counter is ready
+        if self.fps_count >= self.fps_interval or self.dyn_count >= self.dyn_interval:
+            now = time.perf_counter()
+            if self.fps_count >= self.fps_interval:
+                self._tick_fps(now)
+            if self.dyn_count >= self.dyn_interval:
+                self._tick_dynamics(y_pos / 10, now)
 
     # -- FPS ------------------------------------------------------------------
 
     def _tick_fps(self, now):
-        self.fps_count += 1
-        if self.fps_count >= self.fps_interval:
-            elapsed      = now - self.fps_start
-            self.avg_fps = self.fps_count / elapsed if elapsed > 0 else 0.0
-            self.fps_count = 0
-            self.fps_start = now
+        elapsed      = now - self.fps_start
+        self.avg_fps = self.fps_count / elapsed if elapsed > 0 else 0.0
+        self.fps_count = 0
+        self.fps_start = now
 
     # -- Dynamics -------------------------------------------------------------
 
     def _tick_dynamics(self, y_pos, now):
-        self.dyn_count += 1
-        if self.dyn_count >= self.dyn_interval:
-            elapsed         = now - self.dyn_start
-            delta_y         = y_pos - self.prev_y
-            self.avg_speed  = delta_y / elapsed if elapsed > 0 else 0.0
-            delta_speed     = self.avg_speed - self.prev_speed
-            self.avg_acc    = delta_speed / elapsed if elapsed > 0 else 0.0
-            self.prev_speed = self.avg_speed
-            self.prev_y     = y_pos
-            self.dyn_count  = 0
-            self.dyn_start  = now
+        elapsed         = now - self.dyn_start
+        delta_y         = y_pos - self.prev_y
+        self.avg_speed  = delta_y / elapsed if elapsed > 0 else 0.0
+        delta_speed     = self.avg_speed - self.prev_speed
+        self.avg_acc    = delta_speed / elapsed if elapsed > 0 else 0.0
+        self.prev_speed = self.avg_speed
+        self.prev_y     = y_pos
+        self.dyn_count  = 0
+        self.dyn_start  = now
 
 
 # ── Screen Compositing ────────────────────────────────────────────────────────
